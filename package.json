@@ -1,0 +1,17 @@
+{
+  "name": "igbot",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Instagram automation CLI for auth bootstrap and official content publishing",
+  "bin": {
+    "igbot": "./src/cli.js"
+  },
+  "scripts": {
+    "auth:url": "node src/cli.js auth-url",
+    "me": "node src/cli.js me",
+    "env": "node src/cli.js env"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
+  }
+}
