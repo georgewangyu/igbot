@@ -1,0 +1,5 @@
+creator,followers,views,likes,comments,shares,saved,caption,url,posted_at,source
+smallcreator,1200,85000,4300,120,900,260,"Day in the life of a software engineer","https://www.instagram.com/reel/example1/","2026-05-20T12:00:00Z",manual
+smallcreator,1200,2400,120,5,10,4,"Normal update","https://www.instagram.com/reel/example2/","2026-05-18T12:00:00Z",manual
+smallcreator,1200,1800,96,3,8,3,"Desk setup","https://www.instagram.com/reel/example3/","2026-05-15T12:00:00Z",manual
+smallcreator,1200,2100,110,4,9,2,"On call again","https://www.instagram.com/reel/example4/","2026-05-12T12:00:00Z",manual
