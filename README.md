@@ -14,9 +14,10 @@ doc_tags:
 ---
 # igbot — Instagram Automation Client
 
-Minimal Instagram automation client for official API publishing.
+Minimal Instagram automation client for official API account checks, owned-media analytics, and publishing.
 Modeled after `lbot` and `xbot`, but Instagram's access model has more setup friction:
 
+- account/media analytics require an Instagram professional account and approved app permissions
 - publishing requires an Instagram professional account and approved app permissions
 - media has to be reachable at a public URL before Instagram can ingest it
 - short-form videos are created as media containers, then published after processing
@@ -30,7 +31,16 @@ igbot/
 │   ├── cli.js            # Unified CLI (auth bootstrap + publishing)
 │   ├── client.js         # Instagram Graph API client
 │   ├── credentials.js    # Shared credential loader (.env + private token file)
+│   ├── finder.js         # Owned-account/manual/public-row outlier ranking
+│   ├── manual.js         # CSV/JSON/JSONL worksheet loader
+│   ├── output.js         # Table/JSON/JSONL output helpers
+│   ├── pythonBridge.js   # Experimental instagrapi bridge wrapper
+│   ├── scoring.js        # Baseline and breakout scoring
 │   └── oauth.js          # Authorization URL + token exchange helpers
+├── python/
+│   └── instagrapi_bridge.py     # Experimental private API collector
+├── examples/
+│   └── manual-breakouts.csv
 ├── setup/
 │   └── OFFICIAL_API_SETUP.md  # Durable setup note for Meta app + OAuth
 ├── research/
@@ -45,6 +55,14 @@ igbot/
 npm install
 ```
 
+For experimental local public-discovery collectors:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+```
+
 ## Credentials
 
 Set these in `georgerepo/.tokens/instagram.env` or `igbot/.env`:
@@ -57,6 +75,12 @@ IG_ACCESS_TOKEN=...
 IG_USER_ID=...
 IG_GRAPH_BASE_URL=https://graph.instagram.com
 IG_GRAPH_VERSION=v25.0
+
+# Optional experimental instagrapi bridge:
+IG_PRIVATE_USERNAME=...
+IG_PRIVATE_PASSWORD=...
+IG_PRIVATE_SESSION_FILE=.cache/instagrapi-session.json
+IG_PYTHON_BIN=.venv/bin/python
 ```
 
 Notes:
@@ -74,17 +98,82 @@ Generate an auth URL:
 node src/cli.js auth-url
 ```
 
-Exchange the authorization code:
+Run the guided OAuth flow and save the returned token:
 
 ```bash
-node src/cli.js exchange-code '<code-from-callback>' --long-lived
+node src/cli.js oauth-login
+```
+
+Or exchange the authorization code manually:
+
+```bash
+node src/cli.js exchange-code '<code-from-callback>' --long-lived --save
 ```
 
 Inspect the authenticated Instagram account:
 
 ```bash
-node src/cli.js me
+node src/cli.js account
 ```
+
+Fetch recent owned media:
+
+```bash
+node src/cli.js my-media --max-results 30 --include-insights
+```
+
+Rank owned media against the account baseline:
+
+```bash
+node src/cli.js my-outliers --max-results 60 --min-outlier 2
+```
+
+Daily check:
+
+```bash
+node src/cli.js check
+```
+
+Score a manually collected Instagram public-data worksheet:
+
+```bash
+node src/cli.js score-file examples/manual-breakouts.csv \
+  --max-followers 100000 \
+  --min-views 50000
+```
+
+Experimentally fetch a known creator's recent public media through the Python
+`instagrapi` bridge:
+
+```bash
+node src/cli.js private-login
+node src/cli.js private-profile snackoverflowgeorge --max-results 20
+```
+
+Experimentally search Reels or hashtag Reels through the same bridge:
+
+```bash
+node src/cli.js private-search "software engineer" --max-results 30
+node src/cli.js private-hashtag softwareengineer --max-results 30
+```
+
+The `private-*` commands are unofficial and intentionally experimental. They
+mirror `tiktokbot`'s local Python bridge pattern: Node keeps output/scoring,
+Python handles the platform-specific collection, and failures should be treated
+as collector brittleness rather than official API failures.
+
+Current bridge behavior:
+
+- `private-profile` can fetch known public creators without private login in
+  many cases.
+- `private-search` and `private-hashtag` usually require
+  `IG_PRIVATE_USERNAME` / `IG_PRIVATE_PASSWORD` or a saved
+  `IG_PRIVATE_SESSION_FILE`; without that, Instagram may return
+  `login_required`.
+- Run `private-login` once after setting private credentials. It writes a
+  reusable `instagrapi` session file. If a later search returns
+  `login_required`, the bridge retries once with `relogin()` and refreshes the
+  session file.
 
 Publish an image post from a public image URL:
 
@@ -126,8 +215,15 @@ node src/cli.js env
 
 - build Instagram OAuth authorization URLs
 - exchange auth codes for short-lived or long-lived tokens
+- run a guided OAuth login and save tokens to `georgerepo/.tokens/instagram.env`
 - refresh long-lived tokens
 - inspect token-backed Instagram identity through `/me`
+- inspect the authenticated professional account profile
+- fetch recent owned media
+- optionally fetch per-media insights when the token has permission
+- rank owned media against the account's recent baseline
+- score manually/provider-collected public Instagram rows
+- experimentally collect known-profile/search/hashtag rows via `instagrapi`
 - publish image posts from public image URLs
 - create video/Reel media containers from public video URLs
 - check media container status and publish containers
@@ -135,13 +231,14 @@ node src/cli.js env
 ## What Is Intentionally Missing
 
 - browser automation fallback
+- reliable broad public Reel/search scraping
 - local media hosting/upload helpers
 - carousel publishing
 - Stories publishing
 - trending audio, stickers, effects, and other native composer features
-- generic feed-reading or scraping commands
+- generic feed-reading commands
 
-Those are possible later, but the first useful target is reliable official publishing for hook-testing assets that already exist as public URLs.
+Those are possible later, but the first useful target is reliable official account telemetry and publishing for hook-testing assets that already exist as public URLs.
 
 ## Setup Notes
 

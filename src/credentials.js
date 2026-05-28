@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -35,6 +35,10 @@ function getFileVars() {
     return fileVars;
 }
 
+export function getDefaultEnvFilePath() {
+    return resolve(homedir(), 'Documents/Workspace/georgerepo/.tokens/instagram.env');
+}
+
 export function getEnv(key) {
     return process.env[key] || getFileVars()[key] || '';
 }
@@ -61,4 +65,46 @@ export function loadApiConfig() {
         graphBaseUrl: getEnv('IG_GRAPH_BASE_URL') || 'https://graph.instagram.com',
         graphVersion: getEnv('IG_GRAPH_VERSION') || 'v25.0',
     };
+}
+
+export function loadPrivateApiConfig(overrides = {}) {
+    return {
+        username: overrides.username || getEnv('IG_PRIVATE_USERNAME') || getEnv('IG_USERNAME'),
+        password: overrides.password || getEnv('IG_PRIVATE_PASSWORD') || getEnv('IG_PASSWORD'),
+        sessionFile: overrides.sessionFile || getEnv('IG_PRIVATE_SESSION_FILE'),
+        pythonBin: overrides.pythonBin || getEnv('IG_PYTHON_BIN') || 'python3',
+    };
+}
+
+export function writeEnvValues(filePath, values) {
+    const target = filePath || getDefaultEnvFilePath();
+    const existing = existsSync(target) ? readFileSync(target, 'utf8') : '';
+    const lines = existing ? existing.split('\n') : [];
+    const pending = new Map(Object.entries(values).filter(([, value]) => value !== undefined && value !== null && value !== ''));
+    const output = lines.map((line) => {
+        const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=/);
+        if (!match || !pending.has(match[1])) return line;
+        const key = match[1];
+        const value = pending.get(key);
+        pending.delete(key);
+        return `${key}=${escapeEnvValue(value)}`;
+    });
+
+    if (output.length && output.at(-1) !== '') output.push('');
+    for (const [key, value] of pending) {
+        output.push(`${key}=${escapeEnvValue(value)}`);
+    }
+
+    mkdirSync(resolve(target, '..'), { recursive: true });
+    writeFileSync(target, output.join('\n').replace(/\n*$/, '\n'));
+    fileVars = null;
+    return target;
+}
+
+function escapeEnvValue(value) {
+    const text = String(value);
+    if (!text || /[\s"'#]/.test(text)) {
+        return JSON.stringify(text);
+    }
+    return text;
 }

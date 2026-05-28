@@ -1,4 +1,5 @@
 import { loadApiConfig } from './credentials.js';
+import { toNumber } from './scoring.js';
 
 export class InstagramClient {
     constructor(config = {}) {
@@ -67,6 +68,74 @@ export class InstagramClient {
                 fields: 'id,username,account_type,media_count',
             },
         });
+    }
+
+    async getAccount({ fields = 'id,username,account_type,media_count,followers_count,follows_count,profile_picture_url,biography,website' } = {}) {
+        try {
+            return mapAccount(await this.request('GET', '/me', { query: { fields } }));
+        } catch (error) {
+            const basic = await this.getMe();
+            return { ...mapAccount(basic), fieldWarning: error.message };
+        }
+    }
+
+    async listMedia({
+        igUserId,
+        maxResults = 60,
+        fields = 'id,caption,media_type,media_product_type,permalink,thumbnail_url,timestamp,username,like_count,comments_count',
+        includeInsights = false,
+        insightMetrics = 'reach,likes,comments,shares,saved,total_interactions',
+    } = {}) {
+        const targetId = igUserId || 'me';
+        const media = [];
+        let path = `/${targetId}/media`;
+        let query = {
+            fields,
+            limit: Math.min(100, maxResults),
+        };
+
+        while (media.length < maxResults && path) {
+            let page;
+            try {
+                page = await this.request('GET', path, { query });
+            } catch (error) {
+                if (media.length > 0) throw error;
+                page = await this.request('GET', path, {
+                    query: {
+                        fields: 'id,caption,media_type,media_url,permalink,timestamp,username',
+                        limit: Math.min(100, maxResults),
+                    },
+                });
+            }
+            media.push(...(page.data || []).map(mapMedia));
+            const next = page?.paging?.next;
+            if (!next) break;
+
+            const nextUrl = new URL(next);
+            path = nextUrl.pathname.replace(`/${this.graphVersion}`, '');
+            query = Object.fromEntries(nextUrl.searchParams.entries());
+            query.access_token = undefined;
+        }
+
+        const limited = media.slice(0, maxResults);
+        if (!includeInsights) return limited;
+
+        return Promise.all(limited.map(async (item) => {
+            try {
+                const insights = await this.getMediaInsights({ mediaId: item.id, metrics: insightMetrics });
+                return applyInsights(item, insights);
+            } catch (error) {
+                return { ...item, insightError: error.message };
+            }
+        }));
+    }
+
+    async getMediaInsights({ mediaId, metrics = 'reach,likes,comments,shares,saved,total_interactions' }) {
+        const metricList = Array.isArray(metrics) ? metrics.join(',') : metrics;
+        const result = await this.request('GET', `/${mediaId}/insights`, {
+            query: { metric: metricList },
+        });
+        return result.data || [];
     }
 
     async createImageContainer({
@@ -146,6 +215,71 @@ export class InstagramClient {
         });
         return { container, published };
     }
+}
+
+function mapAccount(item) {
+    return {
+        id: item.id || '',
+        username: item.username || '',
+        accountType: item.account_type || '',
+        mediaCount: toNumber(item.media_count),
+        followers: toNumber(item.followers_count, null),
+        following: toNumber(item.follows_count, null),
+        profilePictureUrl: item.profile_picture_url || '',
+        bio: item.biography || '',
+        website: item.website || '',
+    };
+}
+
+function mapMedia(item) {
+    const likes = toNumber(item.like_count);
+    const comments = toNumber(item.comments_count);
+    return {
+        platform: 'instagram',
+        id: item.id || '',
+        url: item.permalink || '',
+        creator: item.username || '',
+        caption: item.caption || '',
+        mediaType: item.media_type || '',
+        mediaProductType: item.media_product_type || '',
+        thumbnailUrl: item.thumbnail_url || '',
+        postedAt: item.timestamp || '',
+        views: toNumber(item.views ?? item.view_count ?? item.plays, likes + comments),
+        likes,
+        comments,
+        shares: toNumber(item.shares),
+        saved: toNumber(item.saved),
+        source: 'instagram_api',
+    };
+}
+
+function applyInsights(item, insights) {
+    const values = {};
+    for (const insight of insights || []) {
+        const value = Array.isArray(insight.values) && insight.values.length > 0
+            ? insight.values[0]?.value
+            : insight.value;
+        values[insight.name] = toNumber(value, null);
+    }
+
+    return {
+        ...item,
+        views: firstNumber(values.views, values.plays, item.views),
+        reach: firstNumber(values.reach),
+        likes: firstNumber(values.likes, item.likes),
+        comments: firstNumber(values.comments, item.comments),
+        shares: firstNumber(values.shares, item.shares),
+        saved: firstNumber(values.saved, item.saved),
+        totalInteractions: firstNumber(values.total_interactions),
+        insights: values,
+    };
+}
+
+function firstNumber(...values) {
+    for (const value of values) {
+        if (Number.isFinite(value)) return value;
+    }
+    return null;
 }
 
 function withoutEmptyValues(input) {

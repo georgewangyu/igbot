@@ -3,7 +3,11 @@ import { randomBytes } from 'crypto';
 const AUTH_BASE_URL = 'https://www.instagram.com/oauth/authorize';
 const TOKEN_URL = 'https://api.instagram.com/oauth/access_token';
 const LONG_LIVED_TOKEN_URL = 'https://graph.instagram.com/access_token';
-const DEFAULT_SCOPES = ['instagram_business_basic', 'instagram_business_content_publish'];
+export const DEFAULT_SCOPES = [
+    'instagram_business_basic',
+    'instagram_business_content_publish',
+    'instagram_business_manage_insights',
+];
 
 export function buildAuthorizationUrl({
     appId,
@@ -77,6 +81,23 @@ export async function refreshLongLivedToken({ accessToken }) {
     }
 
     return payload;
+}
+
+export function parseOAuthCallbackInput(input) {
+    const text = String(input || '').trim();
+    if (!text) return {};
+
+    try {
+        const url = new URL(text);
+        return {
+            code: url.searchParams.get('code') || '',
+            state: url.searchParams.get('state') || '',
+            error: url.searchParams.get('error') || '',
+            errorDescription: url.searchParams.get('error_description') || url.searchParams.get('error_reason') || '',
+        };
+    } catch {
+        return { code: text };
+    }
 }
 
 async function parseResponse(response) {

@@ -8,7 +8,9 @@
   },
   "scripts": {
     "auth:url": "node src/cli.js auth-url",
+    "oauth:login": "node src/cli.js oauth-login",
     "me": "node src/cli.js me",
+    "check": "node src/cli.js check",
     "env": "node src/cli.js env"
   },
   "dependencies": {
