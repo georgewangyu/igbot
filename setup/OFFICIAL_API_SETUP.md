@@ -97,6 +97,22 @@ node src/cli.js status <creation_id>
 node src/cli.js publish <creation_id>
 ```
 
+Story image:
+
+```bash
+node src/cli.js story-image 'https://example.com/story.png'
+node src/cli.js status <creation_id>
+node src/cli.js publish <creation_id>
+```
+
+Story video:
+
+```bash
+node src/cli.js story-video 'https://example.com/story.mp4'
+node src/cli.js status <creation_id>
+node src/cli.js publish <creation_id>
+```
+
 ## Common Failure Modes
 
 - Missing permissions: the app has not been approved for publishing.

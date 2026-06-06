@@ -205,6 +205,22 @@ Create and immediately publish a Reel/video container:
 node src/cli.js video 'https://example.com/reel.mp4' --caption 'hello from igbot' --publish
 ```
 
+Create an image Story container:
+
+```bash
+node src/cli.js story-image 'https://example.com/story.png'
+node src/cli.js status <creation_id>
+node src/cli.js publish <creation_id>
+```
+
+Create a video Story container:
+
+```bash
+node src/cli.js story-video 'https://example.com/story.mp4'
+node src/cli.js status <creation_id>
+node src/cli.js publish <creation_id>
+```
+
 Show resolved config state:
 
 ```bash
@@ -226,6 +242,7 @@ node src/cli.js env
 - experimentally collect known-profile/search/hashtag rows via `instagrapi`
 - publish image posts from public image URLs
 - create video/Reel media containers from public video URLs
+- create image and video Story containers from public media URLs
 - check media container status and publish containers
 
 ## What Is Intentionally Missing
@@ -234,7 +251,6 @@ node src/cli.js env
 - reliable broad public Reel/search scraping
 - local media hosting/upload helpers
 - carousel publishing
-- Stories publishing
 - trending audio, stickers, effects, and other native composer features
 - generic feed-reading commands
 
