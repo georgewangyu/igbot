@@ -180,6 +180,32 @@ export class InstagramClient {
         });
     }
 
+    async createStoryImageContainer({
+        igUserId,
+        imageUrl,
+    }) {
+        return this.createMediaContainer({
+            igUserId,
+            payload: {
+                image_url: imageUrl,
+                media_type: 'STORIES',
+            },
+        });
+    }
+
+    async createStoryVideoContainer({
+        igUserId,
+        videoUrl,
+    }) {
+        return this.createMediaContainer({
+            igUserId,
+            payload: {
+                video_url: videoUrl,
+                media_type: 'STORIES',
+            },
+        });
+    }
+
     async createMediaContainer({ igUserId, payload }) {
         const targetId = this.requireIgUserId(igUserId);
         const body = withoutEmptyValues(payload);

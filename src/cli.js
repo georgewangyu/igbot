@@ -497,6 +497,56 @@ program
     });
 
 program
+    .command('story-image <image_url>')
+    .description('Create an Instagram Story image container from a public image URL')
+    .option('--ig-user-id <id>', 'Override IG user ID')
+    .option('--publish', 'Publish immediately after creating the container')
+    .action(async (imageUrl, options) => {
+        try {
+            const client = new InstagramClient();
+            const container = await client.createStoryImageContainer({
+                igUserId: options.igUserId,
+                imageUrl,
+            });
+            await printContainerResult({
+                client,
+                container,
+                igUserId: options.igUserId,
+                publish: options.publish,
+                label: 'Story image',
+            });
+        } catch (error) {
+            console.error(`Error: ${error.message}`);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('story-video <video_url>')
+    .description('Create an Instagram Story video container from a public video URL')
+    .option('--ig-user-id <id>', 'Override IG user ID')
+    .option('--publish', 'Publish immediately after creating the container')
+    .action(async (videoUrl, options) => {
+        try {
+            const client = new InstagramClient();
+            const container = await client.createStoryVideoContainer({
+                igUserId: options.igUserId,
+                videoUrl,
+            });
+            await printContainerResult({
+                client,
+                container,
+                igUserId: options.igUserId,
+                publish: options.publish,
+                label: 'Story video',
+            });
+        } catch (error) {
+            console.error(`Error: ${error.message}`);
+            process.exit(1);
+        }
+    });
+
+program
     .command('publish <creation_id>')
     .description('Publish a previously created Instagram media container')
     .option('--ig-user-id <id>', 'Override IG user ID')
@@ -582,6 +632,27 @@ function scoreRows(rows, options) {
         limit: options.limit,
         sort: options.sort,
     });
+}
+
+async function printContainerResult({ client, container, igUserId, publish, label }) {
+    if (!container.id) {
+        throw new Error(`${label} container response did not include id: ${JSON.stringify(container)}`);
+    }
+
+    if (publish) {
+        const published = await client.publishContainer({
+            igUserId,
+            creationId: container.id,
+        });
+        console.log(`${label} published successfully.`);
+        console.log(JSON.stringify({ container, published }, null, 2));
+        return;
+    }
+
+    console.log(`${label} container created.`);
+    console.log(JSON.stringify(container, null, 2));
+    console.log('\nPublish after processing completes with:');
+    console.log(`node src/cli.js publish ${container.id}`);
 }
 
 function parseOptionalBoolean(value) {
