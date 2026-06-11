@@ -158,6 +158,81 @@ export class InstagramClient {
         });
     }
 
+    async createCarouselImageItemContainer({
+        igUserId,
+        imageUrl,
+        altText,
+    }) {
+        return this.createMediaContainer({
+            igUserId,
+            payload: {
+                image_url: imageUrl,
+                is_carousel_item: true,
+                alt_text: altText,
+            },
+        });
+    }
+
+    async createCarouselContainer({
+        igUserId,
+        children,
+        caption,
+    }) {
+        const childIds = normalizeCarouselChildren(children);
+        return this.createMediaContainer({
+            igUserId,
+            payload: {
+                media_type: 'CAROUSEL',
+                children: childIds.join(','),
+                caption,
+            },
+        });
+    }
+
+    async createCarouselImageContainer({
+        igUserId,
+        imageUrls,
+        caption,
+        altTexts = [],
+        waitForChildren = true,
+        pollIntervalMs,
+        timeoutMs,
+    }) {
+        const urls = normalizeCarouselImageUrls(imageUrls);
+        if (altTexts.length && altTexts.length !== urls.length) {
+            throw new Error(`Carousel alt text count (${altTexts.length}) must match image URL count (${urls.length})`);
+        }
+
+        const children = [];
+        for (const [index, imageUrl] of urls.entries()) {
+            const child = await this.createCarouselImageItemContainer({
+                igUserId,
+                imageUrl,
+                altText: altTexts[index],
+            });
+            if (!child.id) {
+                throw new Error(`Carousel child ${index + 1} response did not include id: ${JSON.stringify(child)}`);
+            }
+            children.push(child);
+        }
+
+        if (waitForChildren) {
+            await Promise.all(children.map((child) => this.waitForContainer({
+                creationId: child.id,
+                pollIntervalMs,
+                timeoutMs,
+            })));
+        }
+
+        const container = await this.createCarouselContainer({
+            igUserId,
+            children: children.map((child) => child.id),
+            caption,
+        });
+
+        return { children, container };
+    }
+
     async createVideoContainer({
         igUserId,
         videoUrl,
@@ -229,6 +304,29 @@ export class InstagramClient {
         });
     }
 
+    async waitForContainer({
+        creationId,
+        pollIntervalMs = 5000,
+        timeoutMs = 300000,
+    }) {
+        const startedAt = Date.now();
+        let lastStatus = null;
+
+        while (Date.now() - startedAt <= timeoutMs) {
+            lastStatus = await this.getContainerStatus({ creationId });
+            const status = String(lastStatus.status_code || lastStatus.status || '').toUpperCase();
+            if (status === 'FINISHED' || status === 'READY') {
+                return lastStatus;
+            }
+            if (status === 'ERROR' || status === 'EXPIRED') {
+                throw new Error(`Container ${creationId} failed with status ${status}: ${JSON.stringify(lastStatus)}`);
+            }
+            await sleep(pollIntervalMs);
+        }
+
+        throw new Error(`Timed out waiting for container ${creationId}: ${JSON.stringify(lastStatus)}`);
+    }
+
     async createAndPublishImage(options) {
         const container = await this.createImageContainer(options);
         const creationId = container.id;
@@ -241,6 +339,57 @@ export class InstagramClient {
         });
         return { container, published };
     }
+
+    async createAndPublishCarouselImages({
+        igUserId,
+        imageUrls,
+        caption,
+        altTexts = [],
+        pollIntervalMs,
+        timeoutMs,
+    }) {
+        const result = await this.createCarouselImageContainer({
+            igUserId,
+            imageUrls,
+            caption,
+            altTexts,
+            waitForChildren: true,
+            pollIntervalMs,
+            timeoutMs,
+        });
+        const creationId = result.container.id;
+        if (!creationId) {
+            throw new Error(`Carousel container response did not include id: ${JSON.stringify(result.container)}`);
+        }
+
+        await this.waitForContainer({ creationId, pollIntervalMs, timeoutMs });
+        const published = await this.publishContainer({ igUserId, creationId });
+        return { ...result, published };
+    }
+}
+
+function normalizeCarouselImageUrls(imageUrls) {
+    const urls = Array.isArray(imageUrls)
+        ? imageUrls.map((url) => String(url).trim()).filter(Boolean)
+        : [];
+    if (urls.length < 2 || urls.length > 10) {
+        throw new Error(`Instagram image carousels require 2-10 images; got ${urls.length}`);
+    }
+    return urls;
+}
+
+function normalizeCarouselChildren(children) {
+    const childIds = Array.isArray(children)
+        ? children.map((child) => String(child).trim()).filter(Boolean)
+        : [];
+    if (childIds.length < 2 || childIds.length > 10) {
+        throw new Error(`Instagram carousels require 2-10 child containers; got ${childIds.length}`);
+    }
+    return childIds;
+}
+
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function mapAccount(item) {

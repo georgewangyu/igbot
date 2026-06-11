@@ -455,6 +455,57 @@ program
     });
 
 program
+    .command('carousel <image_urls...>')
+    .description('Create an Instagram image carousel from 2-10 public image URLs')
+    .option('-c, --caption <text>', 'Caption text')
+    .option('--alt-texts <texts>', 'Per-slide alt text separated with ||')
+    .option('--ig-user-id <id>', 'Override IG user ID')
+    .option('--no-wait', 'Skip child-container status polling before creating the parent carousel container')
+    .option('--poll-interval <seconds>', 'Seconds between status checks', parseFloatOption, 5)
+    .option('--timeout <seconds>', 'Maximum seconds to wait for each container', parseFloatOption, 300)
+    .option('--publish', 'Wait for containers and publish immediately')
+    .action(async (imageUrls, options) => {
+        try {
+            const client = new InstagramClient();
+            const altTexts = parseAltTexts(options.altTexts, imageUrls.length);
+            const pollIntervalMs = secondsToMilliseconds(options.pollInterval, 'poll interval');
+            const timeoutMs = secondsToMilliseconds(options.timeout, 'timeout');
+
+            if (options.publish) {
+                const result = await client.createAndPublishCarouselImages({
+                    igUserId: options.igUserId,
+                    imageUrls,
+                    caption: options.caption,
+                    altTexts,
+                    pollIntervalMs,
+                    timeoutMs,
+                });
+                console.log('Carousel published successfully.');
+                console.log(JSON.stringify(result, null, 2));
+                return;
+            }
+
+            const result = await client.createCarouselImageContainer({
+                igUserId: options.igUserId,
+                imageUrls,
+                caption: options.caption,
+                altTexts,
+                waitForChildren: options.wait,
+                pollIntervalMs,
+                timeoutMs,
+            });
+            console.log('Carousel container created.');
+            console.log(JSON.stringify(result, null, 2));
+            console.log('\nPublish after processing completes with:');
+            console.log(`node src/cli.js status ${result.container.id}`);
+            console.log(`node src/cli.js publish ${result.container.id}`);
+        } catch (error) {
+            console.error(`Error: ${error.message}`);
+            process.exit(1);
+        }
+    });
+
+program
     .command('video <video_url>')
     .description('Create a video/Reel container from a public video URL')
     .option('-c, --caption <text>', 'Caption text')
@@ -661,4 +712,21 @@ function parseOptionalBoolean(value) {
     if (String(value).toLowerCase() === 'true') return true;
     if (String(value).toLowerCase() === 'false') return false;
     throw new Error(`Expected boolean value, got: ${value}`);
+}
+
+function parseAltTexts(value, expectedCount) {
+    if (!value) return [];
+    const altTexts = String(value).split('||').map((item) => item.trim());
+    if (altTexts.length !== expectedCount) {
+        throw new Error(`Expected ${expectedCount} alt text entries separated by ||, got ${altTexts.length}`);
+    }
+    return altTexts;
+}
+
+function secondsToMilliseconds(value, label) {
+    const seconds = Number(value);
+    if (!Number.isFinite(seconds) || seconds <= 0) {
+        throw new Error(`Invalid ${label}: ${value}`);
+    }
+    return Math.round(seconds * 1000);
 }
