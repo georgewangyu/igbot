@@ -16,7 +16,7 @@ Meta changes product naming and review flow often. If the app dashboard offers b
 
 ## Environment
 
-Create `georgerepo/.tokens/instagram.env` or `igbot/.env`:
+Create a private env file or local `igbot/.env`:
 
 ```env
 IG_APP_ID=...
@@ -80,13 +80,36 @@ node src/cli.js my-outliers --max-results 60 --min-outlier 2
 Instagram publishing is container based:
 
 1. Create a media container from a public image or video URL.
-2. For videos/Reels, wait until processing is complete.
-3. Publish the container.
+2. For carousel posts, create one child container per slide, then create a parent carousel container.
+3. For videos/Reels and carousel posts, wait until processing is complete.
+4. Publish the container.
 
 Image post:
 
 ```bash
 node src/cli.js image 'https://example.com/post.png' --caption 'hello from igbot'
+```
+
+Image carousel:
+
+```bash
+node src/cli.js carousel \
+  'https://example.com/slide-1.png' \
+  'https://example.com/slide-2.png' \
+  'https://example.com/slide-3.png' \
+  --caption 'hello from igbot'
+node src/cli.js status <creation_id>
+node src/cli.js publish <creation_id>
+```
+
+Create and immediately publish after the child and parent containers are ready:
+
+```bash
+node src/cli.js carousel \
+  'https://example.com/slide-1.png' \
+  'https://example.com/slide-2.png' \
+  --caption 'hello from igbot' \
+  --publish
 ```
 
 Video/Reel:
@@ -119,6 +142,8 @@ node src/cli.js publish <creation_id>
 - Personal account: Instagram personal accounts cannot use official publishing.
 - Private or expiring media URL: Instagram must be able to fetch the image/video directly.
 - Video still processing: check `status` before publishing.
+- Carousel child failed: check each child container ID returned by `carousel`.
+- Too many or too few carousel slides: Instagram image carousels require 2-10 images.
 - Graph version mismatch: set `IG_GRAPH_VERSION` to the version available for the Meta app.
 - Expired long-lived token: run `node src/cli.js refresh-token`.
 - Missing insights: `my-media` still works without `--include-insights`, but outlier ranking may fall back to likes/comments instead of view-style metrics.

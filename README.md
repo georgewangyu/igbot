@@ -4,7 +4,7 @@ doc_id: "igbot/README"
 doc_type: "readme"
 doc_status: "active"
 title: "igbot — Instagram Automation Client"
-description: "Official Instagram publishing CLI for auth bootstrap, image posts, and video/Reel publishing."
+description: "Official Instagram publishing CLI for auth bootstrap, image posts, carousel posts, and video/Reel publishing."
 memory_eligible: false
 memory_priority: "low"
 doc_tags:
@@ -21,6 +21,7 @@ Modeled after `lbot` and `xbot`, but Instagram's access model has more setup fri
 - publishing requires an Instagram professional account and approved app permissions
 - media has to be reachable at a public URL before Instagram can ingest it
 - short-form videos are created as media containers, then published after processing
+- carousel posts create one child container per slide, then publish a parent carousel container
 - native Instagram editing surfaces like trending audio and stickers are not the first target
 
 ## Architecture
@@ -65,7 +66,7 @@ pip install -r requirements.txt
 
 ## Credentials
 
-Set these in `georgerepo/.tokens/instagram.env` or `igbot/.env`:
+Set these in a private env file or local `igbot/.env`:
 
 ```env
 IG_APP_ID=...
@@ -147,7 +148,7 @@ Experimentally fetch a known creator's recent public media through the Python
 
 ```bash
 node src/cli.js private-login
-node src/cli.js private-profile snackoverflowgeorge --max-results 20
+node src/cli.js private-profile example_creator --max-results 20
 ```
 
 Experimentally search Reels or hashtag Reels through the same bridge:
@@ -179,6 +180,36 @@ Publish an image post from a public image URL:
 
 ```bash
 node src/cli.js image 'https://example.com/post.png' --caption 'hello from igbot'
+```
+
+Create an image carousel container from public image URLs:
+
+```bash
+node src/cli.js carousel \
+  'https://example.com/slide-1.png' \
+  'https://example.com/slide-2.png' \
+  'https://example.com/slide-3.png' \
+  --caption 'hello from an igbot carousel'
+```
+
+Create and publish an image carousel after container processing:
+
+```bash
+node src/cli.js carousel \
+  'https://example.com/slide-1.png' \
+  'https://example.com/slide-2.png' \
+  --caption 'hello from an igbot carousel' \
+  --publish
+```
+
+Add per-slide accessibility alt text with `||` separators:
+
+```bash
+node src/cli.js carousel \
+  'https://example.com/slide-1.png' \
+  'https://example.com/slide-2.png' \
+  --caption 'hello from an igbot carousel' \
+  --alt-texts 'Alt text for slide one||Alt text for slide two'
 ```
 
 Create a Reel/video container:
@@ -231,7 +262,7 @@ node src/cli.js env
 
 - build Instagram OAuth authorization URLs
 - exchange auth codes for short-lived or long-lived tokens
-- run a guided OAuth login and save tokens to `georgerepo/.tokens/instagram.env`
+- run a guided OAuth login and save tokens to a private env file
 - refresh long-lived tokens
 - inspect token-backed Instagram identity through `/me`
 - inspect the authenticated professional account profile
@@ -241,6 +272,7 @@ node src/cli.js env
 - score manually/provider-collected public Instagram rows
 - experimentally collect known-profile/search/hashtag rows via `instagrapi`
 - publish image posts from public image URLs
+- create and publish image carousel posts from 2-10 public image URLs
 - create video/Reel media containers from public video URLs
 - create image and video Story containers from public media URLs
 - check media container status and publish containers
@@ -250,7 +282,7 @@ node src/cli.js env
 - browser automation fallback
 - reliable broad public Reel/search scraping
 - local media hosting/upload helpers
-- carousel publishing
+- mixed image/video carousel publishing
 - trending audio, stickers, effects, and other native composer features
 - generic feed-reading commands
 
