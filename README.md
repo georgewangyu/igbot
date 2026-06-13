@@ -24,6 +24,13 @@ Modeled after `lbot` and `xbot`, but Instagram's access model has more setup fri
 - carousel posts create one child container per slide, then publish a parent carousel container
 - native Instagram editing surfaces like trending audio and stickers are not the first target
 
+## Status
+
+This repo is runnable and intentionally split across two surfaces:
+
+- official Graph API auth, account checks, outlier ranking, and publishing
+- bounded experimental public-data collection through the Python bridge
+
 ## Architecture
 
 ```text
@@ -62,6 +69,13 @@ For experimental local public-discovery collectors:
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
+```
+
+## Validation
+
+```bash
+npm run env
+npm test
 ```
 
 ## Credentials
@@ -292,3 +306,15 @@ Those are possible later, but the first useful target is reliable official accou
 
 - `setup/OFFICIAL_API_SETUP.md` — app, OAuth, permissions, and posting setup
 - `research/ACCESS_NOTES.md` — practical constraints for Instagram automation
+
+## Goals
+
+- Keep official publishing and owned-account inspection dependable.
+- Preserve enough public-data experimentation to support breakout scouting.
+- Make media-ingest and permission constraints obvious to the operator.
+
+## Non-Goals
+
+- pretending unofficial collectors are production-stable
+- expanding into a generic agency scheduler
+- hiding missing Meta permissions or token issues
