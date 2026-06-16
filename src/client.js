@@ -173,6 +173,41 @@ export class InstagramClient {
         });
     }
 
+    async createCarouselVideoItemContainer({
+        igUserId,
+        videoUrl,
+    }) {
+        return this.createMediaContainer({
+            igUserId,
+            payload: {
+                media_type: 'VIDEO',
+                video_url: videoUrl,
+                is_carousel_item: true,
+            },
+        });
+    }
+
+    async createCarouselMediaItemContainer({
+        igUserId,
+        item,
+        altText,
+    }) {
+        if (item.type === 'image') {
+            return this.createCarouselImageItemContainer({
+                igUserId,
+                imageUrl: item.url,
+                altText,
+            });
+        }
+        if (item.type === 'video') {
+            return this.createCarouselVideoItemContainer({
+                igUserId,
+                videoUrl: item.url,
+            });
+        }
+        throw new Error(`Unsupported carousel media type: ${item.type}`);
+    }
+
     async createCarouselContainer({
         igUserId,
         children,
@@ -208,6 +243,50 @@ export class InstagramClient {
             const child = await this.createCarouselImageItemContainer({
                 igUserId,
                 imageUrl,
+                altText: altTexts[index],
+            });
+            if (!child.id) {
+                throw new Error(`Carousel child ${index + 1} response did not include id: ${JSON.stringify(child)}`);
+            }
+            children.push(child);
+        }
+
+        if (waitForChildren) {
+            await Promise.all(children.map((child) => this.waitForContainer({
+                creationId: child.id,
+                pollIntervalMs,
+                timeoutMs,
+            })));
+        }
+
+        const container = await this.createCarouselContainer({
+            igUserId,
+            children: children.map((child) => child.id),
+            caption,
+        });
+
+        return { children, container };
+    }
+
+    async createCarouselMediaContainer({
+        igUserId,
+        mediaItems,
+        caption,
+        altTexts = [],
+        waitForChildren = true,
+        pollIntervalMs,
+        timeoutMs,
+    }) {
+        const items = normalizeCarouselMediaItems(mediaItems);
+        if (altTexts.length && altTexts.length !== items.length) {
+            throw new Error(`Carousel alt text count (${altTexts.length}) must match media item count (${items.length})`);
+        }
+
+        const children = [];
+        for (const [index, item] of items.entries()) {
+            const child = await this.createCarouselMediaItemContainer({
+                igUserId,
+                item,
                 altText: altTexts[index],
             });
             if (!child.id) {
@@ -366,6 +445,33 @@ export class InstagramClient {
         const published = await this.publishContainer({ igUserId, creationId });
         return { ...result, published };
     }
+
+    async createAndPublishCarouselMedia({
+        igUserId,
+        mediaItems,
+        caption,
+        altTexts = [],
+        pollIntervalMs,
+        timeoutMs,
+    }) {
+        const result = await this.createCarouselMediaContainer({
+            igUserId,
+            mediaItems,
+            caption,
+            altTexts,
+            waitForChildren: true,
+            pollIntervalMs,
+            timeoutMs,
+        });
+        const creationId = result.container.id;
+        if (!creationId) {
+            throw new Error(`Carousel container response did not include id: ${JSON.stringify(result.container)}`);
+        }
+
+        await this.waitForContainer({ creationId, pollIntervalMs, timeoutMs });
+        const published = await this.publishContainer({ igUserId, creationId });
+        return { ...result, published };
+    }
 }
 
 function normalizeCarouselImageUrls(imageUrls) {
@@ -376,6 +482,38 @@ function normalizeCarouselImageUrls(imageUrls) {
         throw new Error(`Instagram image carousels require 2-10 images; got ${urls.length}`);
     }
     return urls;
+}
+
+function normalizeCarouselMediaItems(mediaItems) {
+    const items = Array.isArray(mediaItems)
+        ? mediaItems.map(normalizeCarouselMediaItem).filter(Boolean)
+        : [];
+    if (items.length < 2 || items.length > 10) {
+        throw new Error(`Instagram carousels require 2-10 media items; got ${items.length}`);
+    }
+    return items;
+}
+
+function normalizeCarouselMediaItem(item) {
+    if (!item) return null;
+    if (typeof item === 'string') {
+        const separator = item.indexOf(':');
+        if (separator <= 0) {
+            throw new Error(`Carousel media item must use image:<url> or video:<url>: ${item}`);
+        }
+        const type = item.slice(0, separator).toLowerCase();
+        const url = item.slice(separator + 1).trim();
+        return normalizeCarouselMediaItem({ type, url });
+    }
+    const type = String(item.type || '').toLowerCase();
+    const url = String(item.url || '').trim();
+    if (!['image', 'video'].includes(type)) {
+        throw new Error(`Carousel media item type must be image or video: ${JSON.stringify(item)}`);
+    }
+    if (!url) {
+        throw new Error(`Carousel media item missing URL: ${JSON.stringify(item)}`);
+    }
+    return { type, url };
 }
 
 function normalizeCarouselChildren(children) {
