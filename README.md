@@ -213,6 +213,8 @@ node src/cli.js carousel \
   'https://example.com/slide-1.png' \
   'https://example.com/slide-2.png' \
   --caption 'hello from an igbot carousel' \
+  --poll-interval 60 \
+  --timeout 900 \
   --publish
 ```
 
@@ -233,8 +235,23 @@ node src/cli.js carousel-media \
   'video:https://example.com/slide-1.mp4' \
   'video:https://example.com/slide-2.mp4' \
   --caption 'hello from an igbot video carousel' \
+  --poll-interval 60 \
+  --timeout 1200 \
   --publish
 ```
+
+For motion carousels, use `carousel-media` with `video:<url>` children. The
+plain `carousel` command publishes image children only, so it will always be
+static even if matching MP4 files exist locally.
+
+Practical video-carousel defaults:
+
+- use direct-public HTTPS URLs, not browser-gated previews
+- prefer MP4 files that return `HEAD 200`
+- encode H.264, yuv420p, faststart
+- use at least `4s` duration for short loops
+- include silent AAC audio if the source loop is otherwise video-only
+- use slow polling: `--poll-interval 60 --timeout 1200`
 
 Add per-slide accessibility alt text with `||` separators:
 
@@ -325,6 +342,8 @@ Those are possible later, but the first useful target is reliable official accou
 ## Setup Notes
 
 - `setup/OFFICIAL_API_SETUP.md` — app, OAuth, permissions, and posting setup
+- `setup/MEDIA_HOSTING_SETUP.md` — public URL hosting pattern for local images,
+  videos, and motion carousel pages
 - `research/ACCESS_NOTES.md` — practical constraints for Instagram automation
 
 ## Goals

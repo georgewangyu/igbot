@@ -8,6 +8,7 @@ export class InstagramClient {
         this.igUserId = config.igUserId || defaults.igUserId;
         this.graphBaseUrlValue = config.graphBaseUrl || defaults.graphBaseUrl || 'https://graph.instagram.com';
         this.graphVersion = config.graphVersion || defaults.graphVersion || 'v25.0';
+        this.minTransientStatusDelayMs = config.minTransientStatusDelayMs ?? 60000;
     }
 
     get graphBaseUrl() {
@@ -44,7 +45,10 @@ export class InstagramClient {
         }
 
         if (!response.ok) {
-            throw new Error(`Instagram API ${method} ${path} failed (${response.status}): ${typeof payload === 'string' ? payload : JSON.stringify(payload)}`);
+            const error = new Error(`Instagram API ${method} ${path} failed (${response.status}): ${typeof payload === 'string' ? payload : JSON.stringify(payload)}`);
+            error.status = response.status;
+            error.payload = payload;
+            throw error;
         }
 
         if (raw) {
@@ -390,9 +394,29 @@ export class InstagramClient {
     }) {
         const startedAt = Date.now();
         let lastStatus = null;
+        let transientErrors = 0;
 
         while (Date.now() - startedAt <= timeoutMs) {
-            lastStatus = await this.getContainerStatus({ creationId });
+            try {
+                lastStatus = await this.getContainerStatus({ creationId });
+                transientErrors = 0;
+            } catch (error) {
+                if (!isTransientStatusError(error)) {
+                    throw error;
+                }
+
+                transientErrors += 1;
+                const delayMs = getTransientStatusDelayMs({
+                    pollIntervalMs,
+                    transientErrors,
+                    remainingMs: timeoutMs - (Date.now() - startedAt),
+                    minDelayMs: this.minTransientStatusDelayMs,
+                });
+                if (delayMs <= 0) break;
+                await sleep(delayMs);
+                continue;
+            }
+
             const status = String(lastStatus.status_code || lastStatus.status || '').toUpperCase();
             if (status === 'FINISHED' || status === 'READY') {
                 return lastStatus;
@@ -528,6 +552,20 @@ function normalizeCarouselChildren(children) {
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientStatusError(error) {
+    const apiError = error?.payload?.error;
+    if (!apiError) return false;
+    if (apiError.is_transient === true) return true;
+    return Number(apiError.code) === 4 || error.status === 429;
+}
+
+function getTransientStatusDelayMs({ pollIntervalMs, transientErrors, remainingMs, minDelayMs }) {
+    const baseMs = Math.max(pollIntervalMs, minDelayMs);
+    const cappedMultiplier = Math.min(4, 2 ** Math.max(0, transientErrors - 1));
+    const delayMs = Math.min(baseMs * cappedMultiplier, 300000);
+    return Math.min(delayMs, Math.max(0, remainingMs));
 }
 
 function mapAccount(item) {

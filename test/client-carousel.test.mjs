@@ -126,3 +126,55 @@ test('createCarouselMediaContainer creates image and video child containers', as
         caption: 'caption here',
     });
 });
+
+test('waitForContainer backs off through transient status rate limits', async () => {
+    const requests = [];
+    globalThis.fetch = async (url, options) => {
+        requests.push({
+            url: String(url),
+            method: options.method,
+        });
+
+        if (requests.length === 1) {
+            return new Response(JSON.stringify({
+                error: {
+                    message: 'Application request limit reached',
+                    type: 'OAuthException',
+                    is_transient: true,
+                    code: 4,
+                    error_subcode: 1349210,
+                },
+            }), {
+                status: 403,
+                headers: { 'content-type': 'application/json' },
+            });
+        }
+
+        return new Response(JSON.stringify({
+            id: 'container-1',
+            status_code: 'FINISHED',
+            status: 'FINISHED',
+        }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+        });
+    };
+
+    const client = new InstagramClient({
+        accessToken: 'test-token',
+        igUserId: 'ig-user-1',
+        graphBaseUrl: 'https://graph.test',
+        graphVersion: 'v1.0',
+        minTransientStatusDelayMs: 1,
+    });
+
+    const result = await client.waitForContainer({
+        creationId: 'container-1',
+        pollIntervalMs: 1,
+        timeoutMs: 200,
+    });
+
+    assert.equal(result.status_code, 'FINISHED');
+    assert.equal(requests.length, 2);
+    assert.equal(requests[0].url, 'https://graph.test/v1.0/container-1?access_token=test-token&fields=id%2Cstatus_code%2Cstatus');
+});
