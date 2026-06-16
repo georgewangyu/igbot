@@ -74,3 +74,55 @@ test('createCarouselImageContainer requires 2-10 images', async () => {
         /2-10 images/
     );
 });
+
+test('createCarouselMediaContainer creates image and video child containers', async () => {
+    const requests = [];
+    const ids = ['image-child', 'video-child', 'parent-1'];
+    globalThis.fetch = async (url, options) => {
+        requests.push({
+            url: String(url),
+            method: options.method,
+            body: JSON.parse(options.body),
+        });
+        return new Response(JSON.stringify({ id: ids[requests.length - 1] }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+        });
+    };
+
+    const client = new InstagramClient({
+        accessToken: 'test-token',
+        igUserId: 'ig-user-1',
+        graphBaseUrl: 'https://graph.test',
+        graphVersion: 'v1.0',
+    });
+
+    const result = await client.createCarouselMediaContainer({
+        mediaItems: [
+            { type: 'image', url: 'https://cdn.test/one.png' },
+            { type: 'video', url: 'https://cdn.test/two.mp4' },
+        ],
+        caption: 'caption here',
+        altTexts: ['first alt', ''],
+        waitForChildren: false,
+    });
+
+    assert.equal(result.children.length, 2);
+    assert.equal(result.container.id, 'parent-1');
+    assert.equal(requests.length, 3);
+    assert.deepEqual(requests[0].body, {
+        image_url: 'https://cdn.test/one.png',
+        is_carousel_item: true,
+        alt_text: 'first alt',
+    });
+    assert.deepEqual(requests[1].body, {
+        media_type: 'VIDEO',
+        video_url: 'https://cdn.test/two.mp4',
+        is_carousel_item: true,
+    });
+    assert.deepEqual(requests[2].body, {
+        media_type: 'CAROUSEL',
+        children: 'image-child,video-child',
+        caption: 'caption here',
+    });
+});

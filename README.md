@@ -216,6 +216,26 @@ node src/cli.js carousel \
   --publish
 ```
 
+Create a mixed image/video carousel container from public media URLs:
+
+```bash
+node src/cli.js carousel-media \
+  'image:https://example.com/slide-1.png' \
+  'video:https://example.com/slide-2.mp4' \
+  'image:https://example.com/slide-3.png' \
+  --caption 'hello from an igbot mixed-media carousel'
+```
+
+Create and publish a mixed image/video carousel after container processing:
+
+```bash
+node src/cli.js carousel-media \
+  'video:https://example.com/slide-1.mp4' \
+  'video:https://example.com/slide-2.mp4' \
+  --caption 'hello from an igbot video carousel' \
+  --publish
+```
+
 Add per-slide accessibility alt text with `||` separators:
 
 ```bash
@@ -287,6 +307,7 @@ node src/cli.js env
 - experimentally collect known-profile/search/hashtag rows via `instagrapi`
 - publish image posts from public image URLs
 - create and publish image carousel posts from 2-10 public image URLs
+- create and publish mixed image/video carousel posts from 2-10 public media URLs
 - create video/Reel media containers from public video URLs
 - create image and video Story containers from public media URLs
 - check media container status and publish containers
@@ -296,7 +317,6 @@ node src/cli.js env
 - browser automation fallback
 - reliable broad public Reel/search scraping
 - local media hosting/upload helpers
-- mixed image/video carousel publishing
 - trending audio, stickers, effects, and other native composer features
 - generic feed-reading commands
 
