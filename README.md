@@ -1,17 +1,3 @@
----
-doc_schema: "doc-frontmatter-v1"
-doc_id: "igbot/README"
-doc_type: "readme"
-doc_status: "active"
-title: "igbot — Instagram Automation Client"
-description: "Official Instagram publishing CLI for auth bootstrap, image posts, carousel posts, and video/Reel publishing."
-memory_eligible: false
-memory_priority: "low"
-doc_tags:
-  - "domain:social-media"
-  - "tool:igbot"
-  - "type:readme"
----
 # igbot — Instagram Automation Client
 
 Minimal Instagram automation client for official API account checks, owned-media analytics, and publishing.
