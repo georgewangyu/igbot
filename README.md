@@ -62,6 +62,7 @@ pip install -r requirements.txt
 ```bash
 npm run env
 npm test
+.venv/bin/python -m unittest discover -s python -p 'test_*.py'
 ```
 
 ## Credentials
@@ -173,8 +174,8 @@ Current bridge behavior:
   `login_required`.
 - Run `private-login` once after setting private credentials. It writes a
   reusable `instagrapi` session file. If a later search returns
-  `login_required`, the bridge retries once with `relogin()` and refreshes the
-  session file.
+  `login_required`, the bridge retries once with the configured credentials
+  and refreshes the session file.
 
 Publish an image post from a public image URL:
 
