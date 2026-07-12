@@ -97,10 +97,11 @@ def relogin(client: Any, session_path: Path | None) -> None:
         raise RuntimeError(
             "Instagram returned login_required and no IG_PRIVATE_USERNAME/IG_PRIVATE_PASSWORD are configured."
         )
-    if hasattr(client, "relogin"):
-        client.relogin()
-    else:
-        client.login(username, password)
+    # Client.relogin() only works when the Client instance already has its
+    # username and password fields populated. A Client restored from a saved
+    # settings file does not reliably have those fields, even though the
+    # bridge has valid credentials in the environment. Pass them explicitly.
+    client.login(username, password, relogin=True)
     dump_session(client, session_path)
 
 
