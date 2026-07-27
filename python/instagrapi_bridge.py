@@ -125,7 +125,17 @@ def session_status(client: Any, session_path: Path | None) -> dict[str, Any]:
 
 def collect_profile(client: Any, username: str, max_results: int) -> list[dict[str, Any]]:
     user = get_user(client, username)
-    medias = client.user_medias(user.pk, amount=max_results)
+    try:
+        # Content Radar wants Reels. The dedicated clips endpoint avoids
+        # unrelated carousel/image rows and also sidesteps malformed public
+        # GraphQL video payloads that can make instagrapi's broad
+        # user_medias() extractor fail before it reaches its private fallback.
+        medias = client.user_clips(user.pk, amount=max_results)
+    except Exception as clips_error:
+        try:
+            medias = client.user_medias(user.pk, amount=max_results)
+        except Exception:
+            raise clips_error
     return [normalize_media(media, user=user, source="instagrapi_profile") for media in medias[:max_results]]
 
 

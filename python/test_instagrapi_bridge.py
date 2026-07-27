@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from instagrapi_bridge import relogin, with_login_retry
+from instagrapi_bridge import collect_profile, relogin, with_login_retry
 
 
 class LoginRequired(Exception):
@@ -67,6 +67,58 @@ class ReloginTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaisesRegex(RuntimeError, "no IG_PRIVATE_USERNAME"):
                 relogin(FakeClient(), None)
+
+
+class ProfileCollectionTests(unittest.TestCase):
+    def test_profile_prefers_reels_endpoint(self) -> None:
+        class User:
+            pk = "123"
+            username = "example"
+            follower_count = 10
+
+        class Client:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            def user_info_by_username_gql(self, username: str) -> User:
+                return User()
+
+            def user_clips(self, user_id: str, amount: int = 0) -> list[object]:
+                self.calls.append("clips")
+                return []
+
+            def user_medias(self, user_id: str, amount: int = 0) -> list[object]:
+                self.calls.append("medias")
+                return []
+
+        client = Client()
+        self.assertEqual(collect_profile(client, "example", 5), [])
+        self.assertEqual(client.calls, ["clips"])
+
+    def test_profile_falls_back_to_general_media(self) -> None:
+        class User:
+            pk = "123"
+            username = "example"
+            follower_count = 10
+
+        class Client:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            def user_info_by_username_gql(self, username: str) -> User:
+                return User()
+
+            def user_clips(self, user_id: str, amount: int = 0) -> list[object]:
+                self.calls.append("clips")
+                raise RuntimeError("clips unavailable")
+
+            def user_medias(self, user_id: str, amount: int = 0) -> list[object]:
+                self.calls.append("medias")
+                return []
+
+        client = Client()
+        self.assertEqual(collect_profile(client, "example", 5), [])
+        self.assertEqual(client.calls, ["clips", "medias"])
 
 
 if __name__ == "__main__":
