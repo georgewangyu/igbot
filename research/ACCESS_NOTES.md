@@ -4,6 +4,12 @@
 
 Instagram is feasible for automation, but not as frictionless as X posting.
 
+Official reference:
+
+- Meta's Instagram API collection documents the professional-account,
+  permissions, publishing, insight, hashtag, and business-discovery surfaces:
+  <https://www.postman.com/meta/instagram/documentation/6yqw8pt/instagram-api>
+
 The useful official first version is:
 
 - official API only
@@ -19,7 +25,8 @@ The useful experimental research version mirrors `tiktokbot`:
 - add a manual/provider row scorer
 - add an unofficial Python bridge for low-volume profile/search/hashtag public
   discovery through `instagrapi`
-- keep hosted providers and Playwright as fallback options, not the default path
+- keep hosted providers and the disabled-by-default unofficial bridge as
+  fallback options; do not add visible-browser or personal-profile automation
 
 ## Constraints
 
@@ -30,8 +37,9 @@ The useful experimental research version mirrors `tiktokbot`:
 - Reels/video posts may require a two-step create/status/publish flow.
 - Account health matters; aggressive account creation/posting can still look spammy even if the API call succeeds.
 - Unofficial public discovery can trigger login challenges, rate limits, or
-  account trust issues. Keep it low-volume, session-backed, and explicitly
-  labeled experimental.
+  account trust issues. Keep it disabled by default and low-volume. Collector
+  commands start anonymous, load a session only with `--use-private-session`,
+  and never log in or rewrite it.
 
 ## Hook Testing Workflow
 
@@ -50,8 +58,11 @@ The API helps ship content, but it does not solve the creative loop. The loop is
 
 For competitor/outlier research, prefer this order:
 
-1. `score-file` for manually collected or provider-exported rows.
-2. `private-profile` for known creator baselines.
-3. `private-search` or `private-hashtag` for low-volume inspiration sweeps.
-4. Hosted provider APIs only if local/private collection becomes too brittle.
-5. Playwright browser automation only if both structured routes fail.
+1. `public-profile` for direct anonymous metadata on a known target.
+2. Official Business Discovery/hashtag surfaces only when the app, professional
+   account relationship, permissions, and token flow support them.
+3. `score-file` for manually collected or provider-exported rows.
+4. Explicitly enabled `private-profile`, `private-search`, or
+   `private-hashtag` only as low-volume unofficial fallbacks.
+5. Stop and document the blocker rather than substituting visible-browser or
+   personal-profile automation.
