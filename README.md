@@ -12,10 +12,12 @@ Modeled after `lbot` and `xbot`, but Instagram's access model has more setup fri
 
 ## Status
 
-This repo is runnable and intentionally split across two surfaces:
+This repo is runnable and intentionally split across explicit surfaces:
 
 - official Graph API auth, account checks, outlier ranking, and publishing
-- bounded experimental public-data collection through the Python bridge
+- direct anonymous public-profile metadata probes
+- manual/provider row scoring for broad research
+- a bounded unofficial Python bridge that is disabled by default
 
 ## Architecture
 
@@ -24,10 +26,13 @@ igbot/
 ├── src/
 │   ├── cli.js            # Unified CLI (auth bootstrap + publishing)
 │   ├── client.js         # Instagram Graph API client
+│   ├── collectorPolicy.js # Fail-closed unofficial adapter gate
 │   ├── credentials.js    # Shared credential loader (.env + private token file)
 │   ├── finder.js         # Owned-account/manual/public-row outlier ranking
+│   ├── health.js         # Non-secret local/live capability report
 │   ├── manual.js         # CSV/JSON/JSONL worksheet loader
 │   ├── output.js         # Table/JSON/JSONL output helpers
+│   ├── publicProbe.js    # Anonymous first-party HTTP metadata probe
 │   ├── pythonBridge.js   # Experimental instagrapi bridge wrapper
 │   ├── scoring.js        # Baseline and breakout scoring
 │   └── oauth.js          # Authorization URL + token exchange helpers
@@ -91,6 +96,8 @@ Notes:
 - `IG_USER_ID` is returned by `exchange-code`; `igbot me` can verify the resolved account
 - `IG_GRAPH_BASE_URL` defaults to `https://graph.instagram.com`; set it to `https://graph.facebook.com` only if your Meta app flow uses the older Facebook-login Graph path
 - `IG_GRAPH_VERSION` defaults to `v25.0`; change this if Meta's current app version differs
+- Saved OAuth exchanges and explicit refreshes record non-secret token update
+  and expiry timestamps for local health reporting.
 
 ## Usage
 
@@ -136,6 +143,21 @@ Daily check:
 node src/cli.js check
 ```
 
+Report local capability state without network, refresh, login, or writes. Add
+`--live` for one read-only official `/me` GET; it still never refreshes or
+rewrites credentials:
+
+```bash
+node src/cli.js health
+node src/cli.js health --live
+```
+
+Probe a known public profile or post with anonymous direct HTTP:
+
+```bash
+node src/cli.js public-profile example_creator
+```
+
 Score a manually collected Instagram public-data worksheet:
 
 ```bash
@@ -148,15 +170,16 @@ Experimentally fetch a known creator's recent public media through the Python
 `instagrapi` bridge:
 
 ```bash
-node src/cli.js private-login
-node src/cli.js private-profile example_creator --max-results 20
+node src/cli.js private-profile example_creator \
+  --enable-unofficial-adapter \
+  --max-results 20
 ```
 
 Experimentally search Reels or hashtag Reels through the same bridge:
 
 ```bash
-node src/cli.js private-search "software engineer" --max-results 30
-node src/cli.js private-hashtag softwareengineer --max-results 30
+node src/cli.js private-search "software engineer" --enable-unofficial-adapter --max-results 30
+node src/cli.js private-hashtag softwareengineer --enable-unofficial-adapter --max-results 30
 ```
 
 The `private-*` commands are unofficial and intentionally experimental. They
@@ -164,18 +187,17 @@ mirror `tiktokbot`'s local Python bridge pattern: Node keeps output/scoring,
 Python handles the platform-specific collection, and failures should be treated
 as collector brittleness rather than official API failures.
 
-Current bridge behavior:
+Current fail-closed bridge behavior:
 
-- `private-profile` can fetch known public creators without private login in
-  many cases.
+- Every collector requires `--enable-unofficial-adapter` and starts anonymous.
+- `private-profile` can fetch known public creators anonymously in some cases.
 - `private-search` and `private-hashtag` usually require
-  `IG_PRIVATE_USERNAME` / `IG_PRIVATE_PASSWORD` or a saved
-  `IG_PRIVATE_SESSION_FILE`; without that, Instagram may return
-  `login_required`.
-- Run `private-login` once after setting private credentials. It writes a
-  reusable `instagrapi` session file. If a later search returns
-  `login_required`, the bridge retries once with the configured credentials
-  and refreshes the session file.
+  a saved `IG_PRIVATE_SESSION_FILE`; select it explicitly with
+  `--use-private-session`.
+- Collector commands never log in, retry with credentials, or rewrite a
+  session. `login_required` is a visible blocker.
+- `private-login --confirm-login` is the only bridge command allowed to log in
+  and write the session file. Run it only as a separate approved action.
 
 Publish an image post from a public image URL:
 
@@ -307,8 +329,11 @@ node src/cli.js env
 - fetch recent owned media
 - optionally fetch per-media insights when the token has permission
 - rank owned media against the account's recent baseline
+- report non-secret local and read-only live capability health
+- probe known public profiles through anonymous first-party HTTP
 - score manually/provider-collected public Instagram rows
-- experimentally collect known-profile/search/hashtag rows via `instagrapi`
+- explicitly opt into experimental known-profile/search/hashtag collection via
+  `instagrapi` without automatic login or session rewrites
 - publish image posts from public image URLs
 - create and publish image carousel posts from 2-10 public image URLs
 - create and publish mixed image/video carousel posts from 2-10 public media URLs

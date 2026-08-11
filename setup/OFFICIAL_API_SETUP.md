@@ -145,5 +145,7 @@ node src/cli.js publish <creation_id>
 - Carousel child failed: check each child container ID returned by `carousel`.
 - Too many or too few carousel slides: Instagram image carousels require 2-10 images.
 - Graph version mismatch: set `IG_GRAPH_VERSION` to the version available for the Meta app.
-- Expired long-lived token: run `node src/cli.js refresh-token`.
+- Expired long-lived token: after explicit approval, run
+  `node src/cli.js refresh-token --save`. If Meta rejects the expired token,
+  repeat the OAuth authorization flow instead. Health commands never refresh.
 - Missing insights: `my-media` still works without `--include-insights`, but outlier ranking may fall back to likes/comments instead of view-style metrics.

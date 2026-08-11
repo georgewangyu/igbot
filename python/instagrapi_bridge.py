@@ -23,7 +23,12 @@ def main() -> int:
     parser.add_argument("--username", default="")
     parser.add_argument("--max-results", type=int, default=30)
     parser.add_argument("--session-file", default=os.environ.get("IG_PRIVATE_SESSION_FILE", ""))
+    parser.add_argument("--auth-mode", choices=["anonymous", "session", "login"], default="anonymous")
+    parser.add_argument("--enable-unofficial-adapter", action="store_true")
     args = parser.parse_args()
+
+    if not args.enable_unofficial_adapter:
+        raise RuntimeError("Unofficial adapter is disabled by default; use the IGBot CLI explicit opt-in.")
 
     try:
         from instagrapi import Client
@@ -37,7 +42,7 @@ def main() -> int:
     client = Client()
     client.delay_range = [1, 3]
     session_path = Path(args.session_file).expanduser() if args.session_file else None
-    login_if_configured(client, session_path, force=args.command == "login")
+    prepare_client(client, session_path, auth_mode=args.auth_mode, command=args.command)
 
     if args.command == "login":
         rows = [session_status(client, session_path)]
@@ -45,17 +50,17 @@ def main() -> int:
         username = args.username or args.query
         if not username:
             raise ValueError("profile requires --username or --query")
-        rows = with_login_retry(client, session_path, lambda: collect_profile(client, username, args.max_results))
+        rows = fail_closed_on_login_required(lambda: collect_profile(client, username, args.max_results))
     elif args.command == "hashtag":
         if not args.query:
             raise ValueError("hashtag requires --query")
-        rows = with_login_retry(client, session_path, lambda: collect_hashtag(client, args.query, args.max_results))
+        rows = fail_closed_on_login_required(lambda: collect_hashtag(client, args.query, args.max_results))
     elif args.command == "search":
         if not args.query:
             raise ValueError("search requires --query")
-        rows = with_login_retry(client, session_path, lambda: collect_search(client, args.query, args.max_results))
+        rows = fail_closed_on_login_required(lambda: collect_search(client, args.query, args.max_results))
     elif args.command == "explore":
-        rows = with_login_retry(client, session_path, lambda: collect_explore(client, args.max_results))
+        rows = fail_closed_on_login_required(lambda: collect_explore(client, args.max_results))
     else:
         raise ValueError(f"Unsupported command: {args.command}")
 
@@ -63,46 +68,42 @@ def main() -> int:
     return 0
 
 
-def login_if_configured(client: Any, session_path: Path | None = None, force: bool = False) -> None:
-    if session_path and session_path.exists():
+def prepare_client(client: Any, session_path: Path | None, auth_mode: str, command: str) -> None:
+    if command == "login" and auth_mode != "login":
+        raise RuntimeError("login command requires --auth-mode login")
+    if command != "login" and auth_mode == "login":
+        raise RuntimeError("collector commands never log in; run private-login explicitly")
+    if auth_mode == "anonymous":
+        return
+    if auth_mode == "session":
+        if not session_path or not session_path.exists():
+            raise RuntimeError("Private session requested but the configured session file is missing.")
         client.load_settings(str(session_path))
+        return
 
     username = os.environ.get("IG_PRIVATE_USERNAME") or os.environ.get("IG_USERNAME")
     password = os.environ.get("IG_PRIVATE_PASSWORD") or os.environ.get("IG_PASSWORD")
-    if username and password and force:
-        client.login(username, password)
-        dump_session(client, session_path)
+    if not username or not password:
+        raise RuntimeError("Explicit login requires IG_PRIVATE_USERNAME/IG_PRIVATE_PASSWORD.")
+    client.login(username, password)
+    dump_session(client, session_path)
 
 
-def with_login_retry(client: Any, session_path: Path | None, operation: Any) -> Any:
+def fail_closed_on_login_required(operation: Any) -> Any:
     try:
         return operation()
     except Exception as error:
         if not is_login_required(error):
             raise
-        relogin(client, session_path)
-        return operation()
+        raise RuntimeError(
+            "Instagram returned login_required. Collector commands fail closed and never log in or rewrite sessions; run private-login explicitly after approval, then rerun with --use-private-session."
+        ) from error
 
 
 def is_login_required(error: Exception) -> bool:
     name = error.__class__.__name__.lower()
     text = str(error).lower()
     return "loginrequired" in name or "login_required" in text or "login required" in text
-
-
-def relogin(client: Any, session_path: Path | None) -> None:
-    username = os.environ.get("IG_PRIVATE_USERNAME") or os.environ.get("IG_USERNAME")
-    password = os.environ.get("IG_PRIVATE_PASSWORD") or os.environ.get("IG_PASSWORD")
-    if not username or not password:
-        raise RuntimeError(
-            "Instagram returned login_required and no IG_PRIVATE_USERNAME/IG_PRIVATE_PASSWORD are configured."
-        )
-    # Client.relogin() only works when the Client instance already has its
-    # username and password fields populated. A Client restored from a saved
-    # settings file does not reliably have those fields, even though the
-    # bridge has valid credentials in the environment. Pass them explicitly.
-    client.login(username, password, relogin=True)
-    dump_session(client, session_path)
 
 
 def dump_session(client: Any, session_path: Path | None) -> None:
@@ -113,7 +114,6 @@ def dump_session(client: Any, session_path: Path | None) -> None:
 
 def session_status(client: Any, session_path: Path | None) -> dict[str, Any]:
     user = client.account_info()
-    dump_session(client, session_path)
     return {
         "ok": True,
         "username": getattr(user, "username", ""),

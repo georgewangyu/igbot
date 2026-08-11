@@ -9,6 +9,9 @@ import { findMyOutliers, rankRows, scoreManualFile } from './finder.js';
 import { DEFAULT_SCOPES, buildAuthorizationUrl, exchangeCodeForToken, exchangeForLongLivedToken, parseOAuthCallbackInput, refreshLongLivedToken } from './oauth.js';
 import { printResults } from './output.js';
 import { collectWithPythonBridge } from './pythonBridge.js';
+import { assertUnofficialAdapterAllowed } from './collectorPolicy.js';
+import { buildHealthReport, summarizeLiveProbeError } from './health.js';
+import { probeInstagramTarget } from './publicProbe.js';
 
 const program = new Command();
 
@@ -64,8 +67,9 @@ program
     .option('--scope <scopes>', 'Comma- or space-separated scopes', DEFAULT_SCOPES.join(','))
     .option('--state <value>', 'Explicit OAuth state value')
     .option('--env-file <path>', 'Env file to update when saving tokens', getDefaultEnvFilePath())
-    .option('--no-save', 'Print tokens without updating the env file')
+    .option('--no-save', 'Do not update the env file; raw values remain hidden unless --print-env is also set')
     .option('--short-lived', 'Keep the short-lived token instead of exchanging for a long-lived token')
+    .option('--print-env', 'Print raw token env values to stdout')
     .action(async (options) => {
         const rl = createInterface({ input: stdin, output: stdout });
         try {
@@ -107,7 +111,7 @@ program
                     shortLivedAccessToken: token.access_token,
                 });
 
-            printTokenSummary(output, { userId: token.user_id, envFile: options.save ? options.envFile : '' });
+            printTokenSummary(output, { userId: token.user_id, envFile: options.save ? options.envFile : '', printEnv: options.printEnv });
             if (options.save) {
                 const target = saveTokenEnv({ token: output, userId: token.user_id, envFile: options.envFile });
                 console.log(`\nSaved Instagram token values to ${target}`);
@@ -127,6 +131,7 @@ program
     .option('--long-lived', 'Immediately exchange the short-lived token for a long-lived token')
     .option('--save', 'Save returned token values to an env file')
     .option('--env-file <path>', 'Env file to update when saving tokens', getDefaultEnvFilePath())
+    .option('--print-env', 'Print raw token env values to stdout')
     .action(async (code, options) => {
         try {
             requireEnv(['IG_APP_ID', 'IG_APP_SECRET']);
@@ -150,7 +155,7 @@ program
                 });
             }
 
-            printTokenSummary(output, { userId: token.user_id, envFile: options.save ? options.envFile : '' });
+            printTokenSummary(output, { userId: token.user_id, envFile: options.save ? options.envFile : '', printEnv: options.printEnv });
             if (options.save) {
                 const target = saveTokenEnv({ token: output, userId: token.user_id, envFile: options.envFile });
                 console.log(`\nSaved Instagram token values to ${target}`);
@@ -166,11 +171,12 @@ program
     .description('Refresh a long-lived Instagram access token')
     .option('--save', 'Save returned token values to an env file')
     .option('--env-file <path>', 'Env file to update when saving tokens', getDefaultEnvFilePath())
+    .option('--print-env', 'Print raw token env values to stdout')
     .action(async (options) => {
         try {
             requireEnv(['IG_ACCESS_TOKEN']);
             const token = await refreshLongLivedToken({ accessToken: getEnv('IG_ACCESS_TOKEN') });
-            printTokenSummary(token, { envFile: options.save ? options.envFile : '' });
+            printTokenSummary(token, { envFile: options.save ? options.envFile : '', printEnv: options.printEnv });
             if (options.save) {
                 const target = saveTokenEnv({ token, envFile: options.envFile });
                 console.log(`\nSaved Instagram token values to ${target}`);
@@ -277,14 +283,18 @@ program
 
 program
     .command('private-login')
-    .description('Create or refresh the experimental instagrapi private session file')
+    .description('Explicitly log in and create/refresh the experimental instagrapi session file')
     .option('--format <format>', 'Output format: json or table', 'table')
+    .option('--confirm-login', 'Confirm this command may authenticate and rewrite the private session file')
     .action(async (options) => {
         try {
+            if (!options.confirmLogin) {
+                throw new Error('private-login mutates authentication state; rerun with --confirm-login only after explicit approval');
+            }
             if (!(getEnv('IG_PRIVATE_USERNAME') || getEnv('IG_USERNAME')) || !(getEnv('IG_PRIVATE_PASSWORD') || getEnv('IG_PASSWORD'))) {
                 throw new Error('Missing credentials: IG_PRIVATE_USERNAME/IG_PRIVATE_PASSWORD');
             }
-            const rows = await collectWithPythonBridge({ command: 'login', maxResults: 1 });
+            const rows = await collectWithPythonBridge({ command: 'login', maxResults: 1, enabled: true, usePrivateSession: true });
             if (options.format === 'json') {
                 console.log(JSON.stringify(rows, null, 2));
                 return;
@@ -300,19 +310,24 @@ program
 
 program
     .command('private-profile <username>')
-    .description('Experimentally fetch public/recent Instagram media for a creator through the instagrapi bridge')
+    .description('Last-resort unofficial creator-media collector; anonymous unless --use-private-session is set')
     .option('--max-results <number>', 'Maximum media items to inspect', parseInteger, 30)
     .option('--limit <number>', 'Maximum rows to print', parseInteger, 20)
     .option('--min-views <number>', 'Minimum target media views', parseInteger)
     .option('--min-views-per-follower <number>', 'Minimum views/followers ratio', parseFloatOption)
     .option('--sort <sort>', 'Sort: outlier, score, views, views-per-follower, engagement, velocity, date', 'views-per-follower')
     .option('--format <format>', 'Output format: table, json, jsonl', 'table')
+    .option('--enable-unofficial-adapter', 'Explicitly enable the unofficial last-resort adapter')
+    .option('--use-private-session', 'Load the configured private session without logging in or rewriting it')
     .action(async (username, options) => {
         try {
+            assertUnofficialAdapterAllowed({ enabled: options.enableUnofficialAdapter });
             const rows = await collectWithPythonBridge({
                 command: 'profile',
                 username,
                 maxResults: options.maxResults,
+                enabled: options.enableUnofficialAdapter,
+                usePrivateSession: options.usePrivateSession,
             });
             const results = scoreRows(rows, options);
             printResults(results, options.format);
@@ -324,7 +339,7 @@ program
 
 program
     .command('private-search <query>')
-    .description('Experimentally search public Instagram Reels through the instagrapi private API bridge')
+    .description('Last-resort unofficial Reels search; anonymous unless --use-private-session is set')
     .option('--max-results <number>', 'Maximum media items to inspect', parseInteger, 30)
     .option('--limit <number>', 'Maximum rows to print', parseInteger, 20)
     .option('--max-followers <number>', 'Maximum creator followers', parseInteger)
@@ -332,12 +347,17 @@ program
     .option('--min-views-per-follower <number>', 'Minimum views/followers ratio', parseFloatOption)
     .option('--sort <sort>', 'Sort: outlier, score, views, views-per-follower, engagement, velocity, date', 'views-per-follower')
     .option('--format <format>', 'Output format: table, json, jsonl', 'table')
+    .option('--enable-unofficial-adapter', 'Explicitly enable the unofficial last-resort adapter')
+    .option('--use-private-session', 'Load the configured private session without logging in or rewriting it')
     .action(async (query, options) => {
         try {
+            assertUnofficialAdapterAllowed({ enabled: options.enableUnofficialAdapter });
             const rows = await collectWithPythonBridge({
                 command: 'search',
                 query,
                 maxResults: options.maxResults,
+                enabled: options.enableUnofficialAdapter,
+                usePrivateSession: options.usePrivateSession,
             });
             const results = scoreRows(rows, options);
             printResults(results, options.format);
@@ -349,7 +369,7 @@ program
 
 program
     .command('private-hashtag <hashtag>')
-    .description('Experimentally fetch Instagram hashtag Reels through the instagrapi private API bridge')
+    .description('Last-resort unofficial hashtag Reels collector; anonymous unless --use-private-session is set')
     .option('--max-results <number>', 'Maximum media items to inspect', parseInteger, 30)
     .option('--limit <number>', 'Maximum rows to print', parseInteger, 20)
     .option('--max-followers <number>', 'Maximum creator followers', parseInteger)
@@ -357,12 +377,17 @@ program
     .option('--min-views-per-follower <number>', 'Minimum views/followers ratio', parseFloatOption)
     .option('--sort <sort>', 'Sort: outlier, score, views, views-per-follower, engagement, velocity, date', 'views-per-follower')
     .option('--format <format>', 'Output format: table, json, jsonl', 'table')
+    .option('--enable-unofficial-adapter', 'Explicitly enable the unofficial last-resort adapter')
+    .option('--use-private-session', 'Load the configured private session without logging in or rewriting it')
     .action(async (hashtag, options) => {
         try {
+            assertUnofficialAdapterAllowed({ enabled: options.enableUnofficialAdapter });
             const rows = await collectWithPythonBridge({
                 command: 'hashtag',
                 query: hashtag.replace(/^#/, ''),
                 maxResults: options.maxResults,
+                enabled: options.enableUnofficialAdapter,
+                usePrivateSession: options.usePrivateSession,
             });
             const results = scoreRows(rows, options);
             printResults(results, options.format);
@@ -683,6 +708,35 @@ program
     });
 
 program
+    .command('public-profile <target>')
+    .description('Probe a public Instagram profile/post through direct anonymous HTTP only')
+    .action(async (target) => {
+        try {
+            console.log(JSON.stringify(await probeInstagramTarget(target), null, 2));
+        } catch (error) {
+            console.error(`Error: ${error.message}`);
+            process.exit(1);
+        }
+    });
+
+program
+    .command('health')
+    .description('Report non-secret capability state without refresh, login, reauthorization, or writes')
+    .option('--live', 'Perform one read-only official /me GET; never refresh or rewrite credentials')
+    .action(async (options) => {
+        let live = null;
+        if (options.live) {
+            try {
+                await new InstagramClient().getMe();
+                live = { status: 'valid', httpStatus: 200, platformCode: null };
+            } catch (error) {
+                live = summarizeLiveProbeError(error);
+            }
+        }
+        console.log(JSON.stringify(buildHealthReport({ live }), null, 2));
+    });
+
+program
     .command('env')
     .description('Show the currently resolved non-secret configuration')
     .action(() => {
@@ -708,23 +762,36 @@ program
 
 program.parse();
 
-function printTokenSummary(token, { userId, envFile = '' } = {}) {
+function printTokenSummary(token, { userId, envFile = '', printEnv = false } = {}) {
     console.log(JSON.stringify({
         token_type: token.token_type,
         expires_in: token.expires_in,
         user_id: userId || token.user_id,
         has_access_token: Boolean(token.access_token),
     }, null, 2));
+    if (!printEnv) {
+        console.log('\nToken values hidden. Use --save to write them to the private env file, or --print-env if you intentionally need raw values.');
+        return;
+    }
     console.log(envFile ? `\nEnv values for ${envFile}:` : '\nSuggested env additions:');
     if (token.access_token) console.log(`IG_ACCESS_TOKEN=${token.access_token}`);
     if (userId || token.user_id) console.log(`IG_USER_ID=${userId || token.user_id}`);
 }
 
 function saveTokenEnv({ token, userId, envFile }) {
+    const now = Date.now();
     return writeEnvValues(envFile, {
         IG_ACCESS_TOKEN: token.access_token,
         IG_USER_ID: userId || token.user_id,
+        IG_ACCESS_TOKEN_UPDATED_AT: new Date(now).toISOString(),
+        IG_ACCESS_TOKEN_EXPIRES_AT: expiryIso(now, token.expires_in),
     });
+}
+
+function expiryIso(now, expiresInSeconds) {
+    const seconds = Number(expiresInSeconds);
+    if (!Number.isFinite(seconds) || seconds <= 0) return undefined;
+    return new Date(now + seconds * 1000).toISOString();
 }
 
 function scoreRows(rows, options) {

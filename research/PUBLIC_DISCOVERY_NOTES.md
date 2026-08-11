@@ -55,7 +55,7 @@ Why:
 - Bright Data explicitly separates profiles, posts, reels, and comments, which
   maps well to fetching follower counts and Reel view counts as separate joins.
 
-Build shape:
+Build shape (every run requires explicit opt-in):
 
 ```text
 igbot find-provider <query-or-url> --provider apify --max-results 50
@@ -95,9 +95,9 @@ Risk:
 Build shape:
 
 ```text
-igbot private-search "software engineer" --backend instagrapi --max-results 30
-igbot private-profile @creator --backend instagrapi --max-results 20
-igbot private-hashtag softwareengineer --backend instagrapi --max-results 30
+igbot private-search "software engineer" --enable-unofficial-adapter --max-results 30
+igbot private-profile @creator --enable-unofficial-adapter --max-results 20
+igbot private-hashtag softwareengineer --enable-unofficial-adapter --max-results 30
 ```
 
 Implementation should mirror `tiktokbot`'s Python bridge: Node CLI/scoring,
@@ -121,33 +121,13 @@ view/follower fields needed for multiplier scoring consistently.
 metadata extraction can break or return partial data. Treat it as a direct-URL
 fallback, not a research source.
 
-### 4. Playwright / Browser Session Adapter
+### 4. Browser Automation
 
-Possible, but lower priority than provider + `instagrapi`.
-
-Use case:
-
-- Open Instagram search, hashtag, audio, or Reels surfaces in a real browser
-  session.
-- Capture visible Reel URLs and creator handles.
-- Optionally visit each profile to read follower count.
-- Optionally inspect network responses for richer JSON.
-
-Risk:
-
-- DOM changes often.
-- View counts may not be in visible markup.
-- Repeated profile visits can look automated.
-- A browser extension exists in the wild for showing follower count while
-  scrolling Reels, which suggests the flow is possible, but it is still a
-  brittle local collector.
-
-Build shape:
-
-```text
-igbot web-reels --query "software engineer" --max-results 30 --headless false
-igbot web-profile @creator --max-results 20
-```
+Not implemented. Routine IGBot research must not open or attach to visible
+Chrome tabs or personal browser profiles. If direct HTTP, approved official
+surfaces, manual/provider rows, and the explicitly enabled unofficial adapter
+are all blocked, record the access blocker instead of adding a stealth or
+headed browser scrape.
 
 ## Reddit / Field Notes
 
@@ -169,12 +149,13 @@ Reddit reports broadly match the technical picture:
 3. Add creator-baseline join:
    for each creator, fetch recent Reels/profile follower count and compute
    `outlier_score`.
-4. Add logged-in `instagrapi` search/hashtag discovery:
-   low-volume inspiration sweeps using private API sessions.
+4. Keep `instagrapi` search/hashtag discovery fail-closed:
+   anonymous by default, explicit session loading only, and no collector login
+   or session rewrite.
 5. Add Apify/provider adapter only if local search/hashtag collection is too
    brittle.
-6. Only then consider a Playwright adapter:
-   useful as a human-in-the-loop fallback, not the default reliable collector.
+6. If all structured paths fail, record the blocker rather than adding a
+   visible-browser or personal-profile adapter.
 
 ## Local Smoke Test
 
@@ -185,8 +166,8 @@ Validated commands:
 
 ```bash
 node src/cli.js score-file examples/manual-breakouts.csv --min-views 1000
-node src/cli.js private-profile snackoverflowgeorge --max-results 5
-node src/cli.js private-profile codewithcwis --max-results 5 --format json
+node src/cli.js private-profile snackoverflowgeorge --enable-unofficial-adapter --max-results 5
+node src/cli.js private-profile codewithcwis --enable-unofficial-adapter --max-results 5 --format json
 ```
 
 `private-profile` works without a private username/password for known public
@@ -196,10 +177,11 @@ creators. Example signal: `codewithcwis` had `616` followers and a Reel with
 Current limitation:
 
 ```bash
-node src/cli.js private-search "software engineer"
-node src/cli.js private-hashtag softwareengineer
+node src/cli.js private-search "software engineer" --enable-unofficial-adapter
+node src/cli.js private-hashtag softwareengineer --enable-unofficial-adapter
 ```
 
-Both currently return `login_required` without a private `instagrapi` session.
-This is expected; the next step is adding a low-risk session setup path before
-using search/hashtag discovery.
+Both return `login_required` when anonymous access is insufficient. They now
+stop without retrying, logging in, or writing a session. An existing session
+can be loaded only with `--use-private-session`; creating or refreshing one is
+a separate `private-login --confirm-login` action requiring approval.

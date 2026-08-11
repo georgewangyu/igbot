@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { getEnv, loadPrivateApiConfig } from './credentials.js';
+import { assertUnofficialAdapterAllowed } from './collectorPolicy.js';
 
 const BRIDGE_PATH = fileURLToPath(new URL('../python/instagrapi_bridge.py', import.meta.url));
 
@@ -11,23 +12,30 @@ export async function collectWithPythonBridge({
     maxResults = 30,
     pythonBin,
     sessionFile,
+    enabled = false,
+    usePrivateSession = false,
 } = {}) {
+    assertUnofficialAdapterAllowed({ enabled });
     const config = loadPrivateApiConfig({ pythonBin, sessionFile });
     const python = config.pythonBin || getEnv('IG_PYTHON_BIN') || 'python3';
     const args = [
         BRIDGE_PATH,
         command,
+        '--enable-unofficial-adapter',
         '--max-results',
         String(maxResults),
+        '--auth-mode',
+        command === 'login' ? 'login' : (usePrivateSession ? 'session' : 'anonymous'),
     ];
     if (query) args.push('--query', query);
     if (username) args.push('--username', username.replace(/^@/, ''));
     if (config.sessionFile) args.push('--session-file', config.sessionFile);
 
+    const includeCredentials = command === 'login';
     const { stdout, stderr } = await runProcess(python, args, {
         ...process.env,
-        IG_PRIVATE_USERNAME: config.username || process.env.IG_PRIVATE_USERNAME || '',
-        IG_PRIVATE_PASSWORD: config.password || process.env.IG_PRIVATE_PASSWORD || '',
+        IG_PRIVATE_USERNAME: includeCredentials ? (config.username || process.env.IG_PRIVATE_USERNAME || '') : '',
+        IG_PRIVATE_PASSWORD: includeCredentials ? (config.password || process.env.IG_PRIVATE_PASSWORD || '') : '',
         IG_PRIVATE_SESSION_FILE: config.sessionFile || process.env.IG_PRIVATE_SESSION_FILE || '',
     }, Number.parseInt(process.env.IG_PRIVATE_BRIDGE_TIMEOUT_MS || '90000', 10));
 
