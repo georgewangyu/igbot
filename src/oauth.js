@@ -5,6 +5,8 @@ const TOKEN_URL = 'https://api.instagram.com/oauth/access_token';
 const LONG_LIVED_TOKEN_URL = 'https://graph.instagram.com/access_token';
 export const DEFAULT_SCOPES = [
     'instagram_business_basic',
+    'instagram_business_manage_messages',
+    'instagram_business_manage_comments',
     'instagram_business_content_publish',
     'instagram_business_manage_insights',
 ];
@@ -17,6 +19,7 @@ export function buildAuthorizationUrl({
 }) {
     const url = new URL(AUTH_BASE_URL);
     url.searchParams.set('client_id', appId);
+    url.searchParams.set('force_reauth', 'true');
     url.searchParams.set('redirect_uri', redirectUri);
     url.searchParams.set('response_type', 'code');
     url.searchParams.set('scope', scopes.join(','));
