@@ -9,8 +9,10 @@ This repo uses the official Instagram Graph/Platform publishing path. It does no
 - Publishing permission for the app, typically `instagram_business_content_publish`.
 - Basic profile permission, typically `instagram_business_basic`.
 - Insights permission for richer account checks, typically `instagram_business_manage_insights`.
-- Comment permission if comment-management commands are added later, typically `instagram_business_manage_comments`.
-- A valid OAuth redirect URI, for example `http://127.0.0.1:8787/callback`.
+- Message and comment permissions configured for the app, typically
+  `instagram_business_manage_messages` and `instagram_business_manage_comments`.
+- A valid HTTPS OAuth redirect URI. George's configured callback is
+  `https://snackoverflowgeorge.com/oauth/instagram/callback`.
 
 Meta changes product naming and review flow often. If the app dashboard offers both older Facebook-login-based Instagram Graph API setup and newer Instagram Login/API setup, prefer the flow that grants the `instagram_business_*` scopes for the account being tested.
 
@@ -21,7 +23,7 @@ Create a private env file or local `igbot/.env`:
 ```env
 IG_APP_ID=...
 IG_APP_SECRET=...
-IG_REDIRECT_URI=http://127.0.0.1:8787/callback
+IG_REDIRECT_URI=https://snackoverflowgeorge.com/oauth/instagram/callback
 IG_ACCESS_TOKEN=
 IG_USER_ID=
 IG_GRAPH_BASE_URL=https://graph.instagram.com
@@ -37,6 +39,11 @@ node src/cli.js oauth-login
 ```
 
 This prints the authorization URL, accepts the callback URL or `code`, exchanges it for a token, upgrades it to a long-lived token by default, and saves `IG_ACCESS_TOKEN` / `IG_USER_ID`.
+
+The authorization URL requests a fresh account selection and uses the same
+business permission set shown in the Meta dashboard's generated embed URL.
+Keep the saved dashboard redirect and `IG_REDIRECT_URI` byte-for-byte
+identical; do not add a trailing slash to only one side.
 
 Alternatively, generate an authorization URL:
 
