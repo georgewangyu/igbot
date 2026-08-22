@@ -155,4 +155,12 @@ node src/cli.js publish <creation_id>
 - Expired long-lived token: after explicit approval, run
   `node src/cli.js refresh-token --save`. If Meta rejects the expired token,
   repeat the OAuth authorization flow instead. Health commands never refresh.
+- Preventive schedule: run a non-secret health check daily and refresh while
+  the token is still valid when fewer than 14 days remain. Do not wait for the
+  approximate 60-day expiry boundary.
+- Browser login and app OAuth are separate. A signed-in instagram.com session
+  does not make an expired IGBot token valid.
+- Redirect mismatch during code exchange: discard the one-time code and start
+  a fresh authorization request after making the configured, requested, and
+  exchanged redirect URI byte-for-byte identical. Never log the callback URL.
 - Missing insights: `my-media` still works without `--include-insights`, but outlier ranking may fall back to likes/comments instead of view-style metrics.

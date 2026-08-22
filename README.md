@@ -143,6 +143,21 @@ Daily check:
 node src/cli.js check
 ```
 
+Token maintenance policy:
+
+- Run `health` daily and refresh the saved long-lived token while it is still
+  valid when fewer than 14 days remain. The early threshold protects against a
+  missed scheduled run before the approximate 60-day boundary.
+- `health`, `health --live`, and `check` never refresh or rewrite credentials.
+  Credential maintenance is a separate bounded
+  `node src/cli.js refresh-token --save` step.
+- If refresh returns Meta code `190` or reports an expired/revoked token, stop
+  retrying and run a fresh OAuth flow. Browser login alone does not authorize
+  IGBot.
+- OAuth callback codes are one-time secrets. Exchange them with the exact same
+  redirect URI used to request the code, and never put the code or full
+  callback URL in logs or durable reports.
+
 Report local capability state without network, refresh, login, or writes. Add
 `--live` for one read-only official `/me` GET; it still never refreshes or
 rewrites credentials:
