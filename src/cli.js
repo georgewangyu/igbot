@@ -587,6 +587,7 @@ program
     .description('Create a video/Reel container from a public video URL')
     .option('-c, --caption <text>', 'Caption text')
     .option('--media-type <type>', 'Instagram media_type, usually REELS for short-form video', 'REELS')
+    .option('--collaborators <usernames>', 'Comma-separated Instagram usernames to invite as collaborators (max 3)')
     .option('--cover-url <url>', 'Optional public cover image URL')
     .option('--share-to-feed <value>', 'true or false')
     .option('--thumb-offset <seconds>', 'Video thumbnail frame offset in seconds')
@@ -600,6 +601,7 @@ program
                 videoUrl,
                 caption: options.caption,
                 mediaType: options.mediaType,
+                collaborators: options.collaborators === undefined ? undefined : options.collaborators.split(','),
                 coverUrl: options.coverUrl,
                 shareToFeed: parseOptionalBoolean(options.shareToFeed),
                 thumbOffset: options.thumbOffset,

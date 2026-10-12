@@ -293,6 +293,31 @@ Create a Reel/video container:
 node src/cli.js video 'https://example.com/reel.mp4' --caption 'hello from igbot'
 ```
 
+Invite collaborators when creating a Reel:
+
+```bash
+node src/cli.js video 'https://example.com/reel.mp4' \
+  --caption 'Approved caption' \
+  --collaborators 'examplecreator,examplepartner'
+```
+
+The optional `--collaborators` flag sends Meta's `collaborators` array in the
+Reel container request. It accepts up to three unique usernames, normalizes
+case and optional leading `@`, and rejects invalid input before any request.
+The client equivalent is `createVideoContainer({ ..., collaborators: ['examplecreator'] })`.
+Omitting the option preserves ordinary publishing. This helper supports
+collaborators for `REELS`; Stories are not supported.
+
+Verify the publishing account and exact collaborator profiles before creating
+the container. Wait for `status` to return `FINISHED`, then use `publish` as
+shown below. Publication sends an invitation; the invited account must accept
+before the Reel appears as a shared post. Record invitation and acceptance
+separately. A caption mention or `user_tags` tag is not a collaboration invite.
+Do not silently retry without collaborators or publish a replacement if Meta
+rejects the requested invitation.
+
+See Meta's [IG User Media reference](https://developers.facebook.com/documentation/instagram-platform/instagram-graph-api/reference/ig-user/media/).
+
 Check container status:
 
 ```bash

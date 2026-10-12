@@ -324,7 +324,12 @@ export class InstagramClient {
         coverUrl,
         shareToFeed,
         thumbOffset,
+        collaborators,
     }) {
+        const usernames = normalizeCollaborators(collaborators);
+        if (usernames.length && mediaType !== 'REELS') {
+            throw new Error('Video collaborators are supported for REELS only.');
+        }
         return this.createMediaContainer({
             igUserId,
             payload: {
@@ -334,6 +339,7 @@ export class InstagramClient {
                 cover_url: coverUrl,
                 share_to_feed: shareToFeed,
                 thumb_offset: thumbOffset,
+                collaborators: usernames.length ? usernames : undefined,
             },
         });
     }
@@ -631,6 +637,28 @@ function firstNumber(...values) {
         if (Number.isFinite(value)) return value;
     }
     return null;
+}
+
+function normalizeCollaborators(input) {
+    if (input === undefined || input === null) return [];
+    if (!Array.isArray(input)) {
+        throw new Error('Collaborators must be an array of Instagram usernames.');
+    }
+    const usernames = input.map((value) => {
+        if (typeof value !== 'string') {
+            throw new Error('Each collaborator must be an Instagram username.');
+        }
+        const username = value.trim().replace(/^@/, '').toLowerCase();
+        if (!/^[a-z0-9_.]{1,30}$/.test(username)) {
+            throw new Error('Invalid collaborator username; use 1-30 letters, digits, periods, or underscores.');
+        }
+        return username;
+    });
+    const unique = [...new Set(usernames)];
+    if (unique.length > 3) {
+        throw new Error('Instagram supports up to 3 collaborator usernames per Reel.');
+    }
+    return unique;
 }
 
 function withoutEmptyValues(input) {
