@@ -27,7 +27,7 @@ igbot/
 │   ├── cli.js            # Unified CLI (auth bootstrap + publishing)
 │   ├── client.js         # Instagram Graph API client
 │   ├── collectorPolicy.js # Fail-closed unofficial adapter gate
-│   ├── credentials.js    # Shared credential loader (.env + private token file)
+│   ├── credentials.js    # Shared credential loader (external credential config)
 │   ├── finder.js         # Owned-account/manual/public-row outlier ranking
 │   ├── health.js         # Non-secret local/live capability report
 │   ├── manual.js         # CSV/JSON/JSONL worksheet loader
@@ -72,7 +72,8 @@ npm test
 
 ## Credentials
 
-Set these in a private env file or local `igbot/.env`:
+Set these in `~/.config/igbot/credentials.env` or an external file
+selected with `IGBOT_ENV_FILE`:
 
 ```env
 IG_APP_ID=...
@@ -409,3 +410,12 @@ Those are possible later, but the first useful target is reliable official accou
 - pretending unofficial collectors are production-stable
 - expanding into a generic agency scheduler
 - hiding missing Meta permissions or token issues
+
+
+## External credential configuration
+
+Set `IGBOT_ENV_FILE` explicitly, or store an `envFile` pointer in
+`~/.config/igbot/config.json`. Without a pointer, the default is
+`~/.config/igbot/credentials.env`. Keep these files outside the public checkout.
+An explicit env-file selection isolates the process from ambient and default
+account credentials.

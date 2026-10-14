@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { resolve } from 'path';
-import { fileURLToPath } from 'url';
 
 function loadEnvFile(filePath) {
+    if (!filePath) return {};
     if (!existsSync(filePath)) return {};
 
     const loaded = {};
@@ -24,22 +24,41 @@ function loadEnvFile(filePath) {
 
 let fileVars = null;
 
+function configuredEnvPath() {
+    const configPath = resolve(homedir(), '.config', 'igbot', 'config.json');
+    if (!existsSync(configPath)) return resolve(homedir(), '.config', 'igbot', 'credentials.env');
+    const config = JSON.parse(readFileSync(configPath, 'utf8'));
+    if (typeof config.envFile !== 'string' || !config.envFile.trim()) {
+        throw new Error('The local credential config requires a nonempty envFile.');
+    }
+    return resolve(config.envFile);
+}
+
 function getFileVars() {
     if (fileVars) return fileVars;
 
-    const dir = fileURLToPath(new URL('.', import.meta.url));
-    const localEnv = resolve(dir, '..', '.env');
-    const privateEnv = resolve(homedir(), '.config/igbot/credentials.env');
+    const overrideEnv = process.env.IGBOT_ENV_FILE;
 
-    fileVars = { ...loadEnvFile(privateEnv), ...loadEnvFile(localEnv) };
+    if (overrideEnv) {
+        fileVars = loadEnvFile(resolve(overrideEnv));
+        return fileVars;
+    }
+    const privateEnv = configuredEnvPath();
+
+    fileVars = {
+        ...loadEnvFile(privateEnv),
+    };
     return fileVars;
 }
 
 export function getDefaultEnvFilePath() {
-    return resolve(homedir(), '.config/igbot/credentials.env');
+    return process.env.IGBOT_ENV_FILE
+        ? resolve(process.env.IGBOT_ENV_FILE)
+        : configuredEnvPath();
 }
 
 export function getEnv(key) {
+    if (process.env.IGBOT_ENV_FILE) return getFileVars()[key] || '';
     return process.env[key] || getFileVars()[key] || '';
 }
 

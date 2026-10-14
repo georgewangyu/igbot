@@ -1,6 +1,6 @@
 # IGBot Vision
 
-`igbot` should be the local Instagram operator for George's workflow:
+`igbot` should be the local Instagram operator for the operator's workflow:
 bootstrap auth, inspect owned-account state, rank owned-media outliers, and
 publish posts or Reels through the official path when possible.
 
