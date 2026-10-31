@@ -585,6 +585,7 @@ program
 program
     .command('video <video_url>')
     .description('Create a video/Reel container from a public video URL')
+    .option('--trial', 'Create a Trial Reel with manual graduation and no feed sharing')
     .option('-c, --caption <text>', 'Caption text')
     .option('--media-type <type>', 'Instagram media_type, usually REELS for short-form video', 'REELS')
     .option('--collaborators <usernames>', 'Comma-separated Instagram usernames to invite as collaborators (max 3)')
@@ -605,6 +606,7 @@ program
                 coverUrl: options.coverUrl,
                 shareToFeed: parseOptionalBoolean(options.shareToFeed),
                 thumbOffset: options.thumbOffset,
+                trial: options.trial ?? false,
             });
 
             if (options.publish) {

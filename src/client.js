@@ -325,8 +325,21 @@ export class InstagramClient {
         shareToFeed,
         thumbOffset,
         collaborators,
+        trial = false,
     }) {
         const usernames = normalizeCollaborators(collaborators);
+        if (typeof trial !== 'boolean') {
+            throw new Error('trial must be a boolean.');
+        }
+        if (trial && mediaType !== 'REELS') {
+            throw new Error('Trial publishing supports REELS only.');
+        }
+        if (trial && shareToFeed !== undefined && shareToFeed !== false) {
+            throw new Error('Trial publishing requires shareToFeed=false.');
+        }
+        if (trial && usernames.length) {
+            throw new Error('Trial Reels do not support collaborators.');
+        }
         if (usernames.length && mediaType !== 'REELS') {
             throw new Error('Video collaborators are supported for REELS only.');
         }
@@ -337,9 +350,10 @@ export class InstagramClient {
                 caption,
                 media_type: mediaType,
                 cover_url: coverUrl,
-                share_to_feed: shareToFeed,
+                share_to_feed: trial ? false : shareToFeed,
                 thumb_offset: thumbOffset,
                 collaborators: usernames.length ? usernames : undefined,
+                trial_params: trial ? { graduation_strategy: 'MANUAL' } : undefined,
             },
         });
     }

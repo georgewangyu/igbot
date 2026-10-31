@@ -294,6 +294,24 @@ Create a Reel/video container:
 node src/cli.js video 'https://example.com/reel.mp4' --caption 'hello from igbot'
 ```
 
+Create a Trial Reel container with manual graduation:
+
+```bash
+node src/cli.js video 'https://example.com/reel.mp4' --trial --caption 'Approved caption'
+```
+
+`--trial` sends `trial_params: { graduation_strategy: 'MANUAL' }` and forces
+`share_to_feed: false`. It rejects non-REELS media, collaborators, and conflicting
+feed-sharing options before sending a request. Omitting it preserves ordinary
+Reel behavior. API failures never fall back to a regular Reel.
+
+Wait for the container to reach `FINISHED`, then publish its exact ID once with
+`publish`. An ambiguous publish response must be reconciled before another
+attempt. Verify the finished post's Trial status; generic `REELS` metadata does
+not prove Trial distribution. Account eligibility remains a live API boundary.
+Native filters and editor effects must be handled separately from this API
+container option. See Meta's [publishing guide](https://developers.facebook.com/documentation/instagram-platform/content-publishing).
+
 Invite collaborators when creating a Reel:
 
 ```bash
